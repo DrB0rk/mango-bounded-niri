@@ -109,6 +109,13 @@ void sleep_monitor(const Arg *arg);
 void wakeup_monitor(const Arg *arg);
 void sleep_toggle_monitor(const Arg *arg);
 void scroller_stack(const Arg *arg);
+/* Bounded-Niri: navigate the focused monitor's primary axis regardless of
+ * whether it is a horizontal or vertical scroller. arg->i is the relative
+ * direction: 0 means "backward", 1 means "forward". The function maps
+ * that to LEFT/RIGHT on a horizontal-scroller layout and UP/DOWN on a
+ * vertical-scroller layout before invoking the same scroller_apply_stack
+ * path that scroller_stack uses. */
+void scroller_axis_navigate(const Arg *arg);
 void toggle_all_floating(const Arg *arg);
 void dwindle_toggle_split_direction(const Arg *arg);
 void dwindle_split_horizontal(const Arg *arg);

@@ -4893,6 +4893,16 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	} else if (strcmp(func_name, "scroller_stack") == 0) {
 		func = scroller_stack;
 		(*arg).i = parse_direction(arg_value);
+	} else if (strcmp(func_name, "scroller_axis_navigate") == 0) {
+		func = scroller_axis_navigate;
+		/* arg->i: 0 = backward along primary axis, 1 = forward. */
+		if (arg_value && (arg_value[0] == 'p' || arg_value[0] == 'P' ||
+						  arg_value[0] == 'f' || arg_value[0] == 'F' ||
+						  strcmp(arg_value, "next") == 0 ||
+						  strcmp(arg_value, "1") == 0))
+			(*arg).i = 1;
+		else
+			(*arg).i = 0;
 	} else if (strcmp(func_name, "toggle_all_floating") == 0) {
 		func = toggle_all_floating;
 	} else if (strcmp(func_name, "dwindle_toggle_split_direction") == 0) {

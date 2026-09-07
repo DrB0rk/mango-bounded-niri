@@ -2674,6 +2674,47 @@ void scroller_stack(const Arg *arg) {
 	scroller_apply_stack(c, target_client, arg->i);
 }
 
+/* Bounded-Niri: SUPER+[/] should navigate the primary axis of the focused
+ * monitor regardless of whether the active tag uses a horizontal or
+ * vertical scroller layout. arg->i is the relative direction:
+ *   0 → "backward" along the primary axis
+ *   1 → "forward"  along the primary axis
+ * Maps 0/1 to LEFT/RIGHT on a SCROLLER tag and to UP/DOWN on a
+ * VERTICAL_SCROLLER tag, then re-uses the same find_client_by_direction +
+ * scroller_apply_stack path that scroller_stack uses. Pinned Niri commit:
+ * dd75865f547f0eac0e9b6c4d86d2cd00c0744252 (GPL-3.0-or-later). */
+void scroller_axis_navigate(const Arg *arg) {
+	if (!server.selected_monitor)
+		return;
+	Monitor *m = server.selected_monitor;
+	if (!is_scroller_layout(m))
+		return;
+
+	Client *c = arg->tc ? arg->tc : m->sel;
+	if (!c || !c->mon || c->isfloating)
+		return;
+
+	uint32_t tag = get_client_tag_idx(c);
+	bool horizontal =
+		(m->pertag->ltidxs[tag]->id == SCROLLER);
+
+	int32_t direction;
+	if (horizontal) {
+		direction = (arg->i == 0) ? LEFT : RIGHT;
+	} else {
+		direction = (arg->i == 0) ? UP : DOWN;
+	}
+
+	/* find_client_by_direction reads arg->i; build a local copy with the
+	 * resolved primary-axis direction so the lookup uses the same value
+	 * that scroller_apply_stack will receive below. */
+	Arg resolved = *arg;
+	resolved.i = direction;
+
+	Client *target_client = find_client_by_direction(c, &resolved, false);
+	scroller_apply_stack(c, target_client, direction);
+}
+
 void toggle_all_floating(const Arg *arg) {
 	if (!server.selected_monitor)
 		return;
