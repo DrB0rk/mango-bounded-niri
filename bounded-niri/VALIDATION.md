@@ -29,7 +29,7 @@ no errors, no leftover `MESON_*` link errors.
 
 | Path | Version | Role |
 | --- | --- | --- |
-| `~/.local/bin/mango` (and `build/mango`) | `0.16.3(59a98e23)` | Patched build |
+| `~/.local/bin/mango` (and `build/mango`) | `0.16.3(004f105c)` | Patched build |
 | `/usr/bin/mango` | `0.16.1(release)` | System / live — untouched |
 
 The live compositor is still the stock binary; the user-local patched
@@ -96,12 +96,10 @@ $ nm --defined-only build/mango | grep -E ' T (set_column_size|adjust_column_siz
 000000000002e3c0 T set_column_size
 000000000002e5d0 T adjust_column_size
 000000000002e7c0 T toggle_full_width_column
-0000000000053af0 T scroller
-0000000000054ab0 T vertical_scroller
-0000000000055b80 T scroller_stack_size
-0000000000055ff0 T scroller_toggle_maximized
-0000000000056160 T update_scroller_state
-000000000005fbc0 T client_focus_with_origin
+00000000000581c0 T scroller_stack_size
+0000000000058630 T scroller_toggle_maximized
+00000000000587a0 T update_scroller_state
+0000000000065500 T client_focus_with_origin
 ```
 
 A second grep for the file-local helpers (`apply_bounded_scroller_map_policy`,
@@ -171,16 +169,15 @@ binary cannot take over by accident.
 ```text
 $ git rev-parse --abbrev-ref HEAD
 main
-$ git log --oneline -1
+$ git log --oneline -2
+004f105c docs(scroller): record validation polish for bounded Niri mode
 59a98e23 feat(scroller): implement bounded Niri mode in Mango 0.16.3
 $ git rev-list --left-right --count github/main...HEAD
-0   0   (local and remote in sync at HEAD before this validation commit)
+0   0   (local and remote in sync)
 ```
 
-The validation polish (attribution comments, NOTICE, `dms/`,
-singleton-100 % guard) is staged as a follow-up commit on `main` and
-force-pushed to `github/main`. See `README.md` for the new branch
-state if the SHA advances.
+The repo is `git@github.com:DrB0rk/mango-bounded-niri.git` (private,
+default branch `main`). Both commits are on `github/main`.
 
 ## 11. Known gaps (intentional)
 
