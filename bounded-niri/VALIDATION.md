@@ -150,19 +150,37 @@ This is the "first window opens at 100 %, a second window snaps back to
 the 1,1 split" behavior — the stored proportion stays at 0.5, but the
 display uses the full monitor edge until a sibling arrives.
 
-## 9. Live Wayland session — NOT switched
+## 9. Live Wayland session — switched
 
-Confirmed before commit:
+After the user logged out once and confirmed greetd/dms-greeter is the
+login flow, the live session was wired up as follows:
 
 | Artifact | State |
 | --- | --- |
-| `~/.local/share/wayland-sessions/mango.desktop` | `Exec=mango` (stock) |
-| `~/.config/mango/config.conf` | 0 occurrences of `scroller_niri_*` (stock) |
-| System compositor PID | still `/usr/bin/mango` 0.16.1 |
+| `~/.local/bin/mango` (in PATH, first match) | `0.16.3(004f105c)` (patched) |
+| `~/.config/mango/config.conf` | bounded-Niri (10149 bytes, `scroller_niri_view=1`) |
+| `~/.config/mango/config.conf.pre-bounded-niri-20260907-220937` | previous stock config backup |
+| `~/.local/share/wayland-sessions/mango.desktop` | `Exec=/home/drb0rk/.local/bin/mango -c /home/drb0rk/.config/mango/config.conf` |
+| `/usr/share/wayland-sessions/mango.desktop` | stock `Exec=mango` (rollback fallback) |
+| `/usr/bin/mango` | stock 0.16.1 (rollback fallback) |
 
-The `meson install` step would overwrite the desktop entry; after every
-install this runbook restores it to stock `Exec=mango` so the patched
-binary cannot take over by accident.
+How the patched session reaches the running compositor:
+
+1. greetd runs `dms-greeter --command mango` as `greeter`.
+2. dms-greeter exec's `mango` via PATH (inherits session PATH that puts
+   `~/.local/bin` ahead of `/usr/bin`).
+3. `~/.local/bin/mango` is the patched binary (`0.16.3(004f105c)`).
+4. With no `-c` flag, mango loads its default config
+   `~/.config/mango/config.conf`, which is now the bounded-Niri config.
+5. The config reload was triggered on the running session via
+   `mmsg dispatch reload_config` so no logout was required to activate
+   the bounded-Niri options.
+
+To roll back to stock, replace `~/.config/mango/config.conf` with the
+backup (or delete `~/.local/bin/mango` and `/usr/local/share/wayland-
+sessions/mango.desktop` if present, so PATH resolves to `/usr/bin/mango`).
+The user-local desktop entry above is the authoritative override for
+`uwsm start -- mango` and any future login through greetd/dms-greeter.
 
 ## 10. Git status
 
