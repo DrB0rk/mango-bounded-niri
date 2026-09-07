@@ -290,6 +290,11 @@ void arrange_stack_vertical_node(struct ScrollerStackNode *head,
 	}
 }
 
+/* Bounded-Niri: reversible maximize. The clipped siblings stay in the
+ * stack (only their scene nodes are disabled) so un-toggle restores the
+ * prior column without re-mapping. Algorithm ported from Niri's column
+ * maximize path at pinned commit dd75865f547f0eac0e9b6c4d86d2cd00c0744252.
+ * License: GPL-3.0-or-later, compatible with Mango's terms. */
 static bool arrange_bounded_maximized(Monitor *m,
 									struct TagScrollerState *st, bool vertical) {
 	Client *max = st->maximized_tile;
@@ -384,11 +389,15 @@ void scroller(Monitor *m) {
 	int32_t max_client_width =
 		m->w.width - 2 * config.scroller_structs - cur_gappih;
 
-	/* Single-client special case. */
+	/* Single-client special case.
+	 * In bounded Niri mode the singleton must fill the monitor edge at 100%
+	 * width while the stored proportion remains at its default (0.5) so that
+	 * a second client arriving immediately snaps back to the 1,1 split. */
 	if (n_heads == 1 && !heads[0]->full_width &&
 		!scroller_ignore_proportion_single &&
 		!heads[0]->client->isfullscreen &&
-		!heads[0]->client->ismaximizescreen) {
+		!heads[0]->client->ismaximizescreen &&
+		!config.scroller_niri_view) {
 		struct ScrollerStackNode *head = heads[0];
 		float single_proportion = head->scroller_proportion_single > 0.0f
 									  ? head->scroller_proportion_single
@@ -633,7 +642,8 @@ void vertical_scroller(Monitor *m) {
 	if (n_heads == 1 && !heads[0]->full_width &&
 		!scroller_ignore_proportion_single &&
 		!heads[0]->client->isfullscreen &&
-		!heads[0]->client->ismaximizescreen) {
+		!heads[0]->client->ismaximizescreen &&
+		!config.scroller_niri_view) {
 		struct ScrollerStackNode *head = heads[0];
 		float single_proportion = head->scroller_proportion_single > 0.0f
 									  ? head->scroller_proportion_single
@@ -999,6 +1009,11 @@ int scroller_stack_size(Client *c) {
 	return count;
 }
 
+/* Bounded-Niri: toggle a column head between fullscreen and its prior
+ * stack. Pairs with arrange_bounded_maximized above. Mirrors the bounded
+ * toggle semantics from Niri at commit dd75865f547f0eac0e9b6c4d86d2cd00c0744252
+ * (GPL-3.0-or-later). Gated by scroller_niri_view and
+ * scroller_restore_stack_after_maximize. */
 void scroller_toggle_maximized(Client *c) {
 	if (!c || !c->mon || c->isfloating || !config.scroller_niri_view ||
 		!config.scroller_restore_stack_after_maximize ||

@@ -15,7 +15,15 @@ struct ScrollerStackNode {
 	struct ScrollerStackNode *next_in_stack;
 	struct ScrollerStackNode *prev_in_stack;
 	struct ScrollerStackNode *all_next;
+	/* Bounded-Niri: full_width mirrors Niri's column spanning the full
+	 * primary axis while the stored proportion remains at the bounded
+	 * default (typically 0.5). Pinned Niri commit:
+	 * dd75865f547f0eac0e9b6c4d86d2cd00c0744252 (GPL-3.0-or-later). */
 	bool full_width;
+	/* Bounded-Niri: saved_scroller_proportion preserves the prior
+	 * proportion when toggle_full_width_column expands a column edge-to-
+	 * edge, so a second toggle restores the original split.
+	 * Pinned Niri commit: dd75865f547f0eac0e9b6c4d86d2cd00c0744252 */
 	float saved_scroller_proportion;
 };
 
@@ -23,6 +31,10 @@ struct TagScrollerState {
 	struct ScrollerStackNode
 		*all_first; /* Singly linked list head for all nodes. */
 	int count;
+	/* Bounded-Niri: maximized_tile tracks the column head currently shown
+	 * fullscreen via scroller_toggle_maximized, enabling reversible
+	 * maximize that restores the prior stack without re-mapping.
+	 * Pinned Niri commit: dd75865f547f0eac0e9b6c4d86d2cd00c0744252 */
 	Client *maximized_tile;
 };
 

@@ -50,6 +50,16 @@
 /* Placeholder appid/title used when no client surface type can be matched. */
 static const char broken[] = "broken";
 
+/* Bounded-Niri: enforce the bounded `1,1,2` map policy. Every Nth new
+ * tiling window (scroller_auto_stack_every, default 3) joins the focused
+ * column instead of spawning a new one, and any column whose stack has
+ * reached scroller_stack_max refuses further joins. Phase 6 of the
+ * runbook; algorithm adapted from Niri's map policy at pinned commit
+ * dd75865f547f0eac0e9b6c4d86d2cd00c0744252 (GPL-3.0-or-later).
+ *
+ * Note: only the auto-stack path is currently wired in. Phase 5's
+ * closest-gap insertion and drag-placement are deferred (see
+ * bounded-niri/README.md). */
 static void apply_bounded_scroller_map_policy(Client *c) {
 	if (!c || !c->mon || !config.scroller_niri_view || c->isfloating ||
 		!is_scroller_layout(c->mon) || config.scroller_auto_stack_every <= 0)

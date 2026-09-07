@@ -1,0 +1,70 @@
+bounded-Niri patch for Mango
+Copyright (c) 2026 DrB0rk
+
+This file is part of Mango. Mango is free software; you can redistribute
+it and/or modify it under the terms of the GNU General Public License as
+published by the Free Software Foundation; either version 3 of the License,
+or (at your option) any later version.
+
+Mango is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+details.
+
+You should have received a copy of the GNU General Public License along
+with Mango. If not, see <https://www.gnu.org/licenses/>.
+
+================================================================================
+Third-party derivation
+================================================================================
+
+This source tree is a derivative work of Mango (GPL-3.0-or-later) that
+incorporates algorithms ported from the Niri Wayland compositor
+(GPL-3.0-or-later). The licenses are compatible: GPL-3.0-or-later on top
+of GPL-3.0-or-later is permitted, provided the combined work remains
+under GPL-3.0-or-later and source is offered to recipients.
+
+Pinned upstream revisions:
+
+    Mango: efb5ed9bce19e0ae260ca34b35cfcdc9d4d8b2fc (release/0.16.3)
+           Copyright (c) 2025 DreamMaoMao
+           https://github.com/mangowm/mango
+
+    Niri:  dd75865f547f0eac0e9b6c4d86d2cd00c0744252
+           Copyright (c) the Niri contributors
+           https://github.com/YaLTeR/niri
+
+Algorithmic ports in this patch (with file:line attribution comments):
+
+    - Persistent per-tag scroller state with full_width flag
+        include/mango/layout/scroll.h
+        src/layout/scroll.c (arrange_bounded_maximized)
+    - Reversible whole-column maximize
+        include/mango/layout/scroll.h
+        src/layout/scroll.c (scroller_toggle_maximized)
+    - Bounded column-size actions (set_column_size, adjust_column_size,
+      toggle_full_width_column) with 50% minimum floor
+        src/dispatch/bind.c
+    - Focus-origin-aware client_focus_with_origin with keep-view mode
+        include/mango/common/types.h (FocusOrigin enum)
+        include/mango/manage/client.h
+        src/input/pointer.c
+        src/input/tablet.c
+    - Bounded `1,1,2` map policy (Phase 6 of the runbook)
+        src/manage/client.c (apply_bounded_scroller_map_policy)
+
+================================================================================
+Redistribution
+================================================================================
+
+If you redistribute this patched binary (or a further derivative), you
+must:
+
+    1. Provide or offer the complete corresponding source under
+       GPL-3.0-or-later.
+    2. Preserve this NOTICE file and the upstream LICENSE/COPYING files.
+    3. Preserve authorship and license markings; identify the Niri-derived
+       algorithms in either source comments or accompanying documentation.
+    4. Carry the GPL-3.0-or-later license forward on the combined work.
+
+The authoritative project license for the combined work is GPL-3.0-or-later.

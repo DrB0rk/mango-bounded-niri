@@ -935,6 +935,10 @@ void set_key_mode(const Arg *arg) {
 	return;
 }
 
+/* Bounded-Niri: clamp set_proportion to the bounded floor
+ * scroller_min_proportion (default 0.5 when scroller_niri_view is on).
+ * Algorithm mirrors Niri's column-width floor at pinned commit
+ * dd75865f547f0eac0e9b6c4d86d2cd00c0744252 (GPL-3.0-or-later). */
 void set_proportion(const Arg *arg) {
 	if (!server.selected_monitor)
 		return;
@@ -1030,6 +1034,12 @@ static Client *scroller_action_head(const Arg *arg, Monitor **monitor,
 	return c;
 }
 
+/* Bounded-Niri: set_column_size ports Niri's set-column-width action.
+ * Accepts a fixed pixel count (e.g. "900"), a monitor-relative proportion
+ * (e.g. "0.5"), or a percentage (e.g. "50%"). Values are clamped to the
+ * bounded floor scroller_min_proportion in bounded mode. Algorithm and
+ * string grammar from Niri pinned commit
+ * dd75865f547f0eac0e9b6c4d86d2cd00c0744252 (GPL-3.0-or-later). */
 void set_column_size(const Arg *arg) {
 	Monitor *m = NULL;
 	struct ScrollerStackNode *node = NULL;
@@ -1052,6 +1062,11 @@ void set_column_size(const Arg *arg) {
 	arrange(m, false, false);
 }
 
+/* Bounded-Niri: adjust_column_size ports Niri's adjust-column-width
+ * action. The arg is a delta — either a percentage of the monitor's
+ * primary axis (e.g. "+5%" / "-5%") or a fixed pixel count (e.g. "+90").
+ * Result is clamped to the bounded floor scroller_min_proportion.
+ * Algorithm from Niri pinned commit dd75865f547f0eac0e9b6c4d86d2cd00c0744252. */
 void adjust_column_size(const Arg *arg) {
 	Monitor *m = NULL;
 	struct ScrollerStackNode *node = NULL;
@@ -1081,6 +1096,11 @@ void adjust_column_size(const Arg *arg) {
 	arrange(m, false, false);
 }
 
+/* Bounded-Niri: toggle_full_width_column expands the focused column head
+ * to fill the monitor edge (full_width=true) and saves the prior
+ * proportion so a second toggle restores the original split. Equivalent
+ * of Niri's "maximize column" action; algorithm from pinned commit
+ * dd75865f547f0eac0e9b6c4d86d2cd00c0744252 (GPL-3.0-or-later). */
 void toggle_full_width_column(const Arg *arg) {
 	Monitor *m = NULL;
 	struct ScrollerStackNode *node = NULL;
