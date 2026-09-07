@@ -805,7 +805,7 @@ void pointer_focus(Client *c, struct wlr_surface *surface, double sx, double sy,
 		 (server.selected_monitor && server.selected_monitor->isoverview &&
 		  server.selected_monitor->sel != c)) &&
 		!client_is_unmanaged(c) && VISIBLEON(c, c->mon))
-		client_focus(c, 0);
+		client_focus_with_origin(c, 0, FOCUS_POINTER);
 
 	/* Pointer-driven layer constraints: deactivate as soon as the pointer
 	 * leaves their surface. Toplevel constraints are managed by focusclient
@@ -1155,7 +1155,7 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 			if (c && c->scene && c->scene->node.enabled &&
 				VISIBLEON(c, c->mon) &&
 				(!client_is_unmanaged(c) || client_wants_focus(c)))
-				client_focus(c, 1);
+				client_focus_with_origin(c, 1, FOCUS_POINTER);
 
 			if (surface != old_pointer_focus_surface) {
 				wlr_seat_pointer_notify_clear_focus(server.seat);

@@ -21,6 +21,9 @@
 #include "mango/manage/monitor.h"
 #include "mango/overview/overview.h"
 #include <fcntl.h>
+#include <math.h>
+#include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <wlr/backend.h>
 #include <wlr/backend/headless.h>
@@ -960,16 +963,141 @@ void set_proportion(const Arg *arg) {
 	if (st)
 		node = find_scroller_node(st, tc);
 
-	if (node)
-		node->scroller_proportion = arg->f;
-	tc->scroller_proportion = arg->f;
+	float proportion = arg->f;
+	if (config.scroller_niri_view)
+		proportion = CLAMP_FLOAT(proportion, config.scroller_min_proportion,
+							 1.0f);
+	if (node) {
+		node->scroller_proportion = proportion;
+		node->full_width = false;
+	}
+	tc->scroller_proportion = proportion;
 
 	uint32_t max_client_width =
 		m->w.width - 2 * config.scroller_structs - config.gappih;
-	tc->geom.width = max_client_width * arg->f;
+	tc->geom.width = max_client_width * proportion;
 
 	arrange(m, false, false);
 	return;
+}
+
+static float bounded_scroller_proportion(Monitor *m, float proportion) {
+	if (!config.scroller_niri_view)
+		return proportion;
+	return CLAMP_FLOAT(proportion, config.scroller_min_proportion, 1.0f);
+}
+
+static float scroller_primary_extent(Monitor *m) {
+	uint32_t tag = get_mon_curtag(m);
+	return m->pertag->ltidxs[tag]->id == VERTICAL_SCROLLER ? m->w.height
+																		 : m->w.width;
+}
+
+static float parse_scroller_size(const char *value, float extent,
+								 bool *is_proportion) {
+	char *end = NULL;
+	float amount;
+	if (!value || !*value || extent <= 0.0f)
+		return -1.0f;
+	amount = strtof(value, &end);
+	if (end == value)
+		return -1.0f;
+	while (*end == ' ' || *end == '\t')
+		end++;
+	if (*end == '%') {
+		*is_proportion = true;
+		return amount / 100.0f;
+	}
+	if (*end != '\0')
+		return -1.0f;
+	*is_proportion = false;
+	return amount / extent;
+}
+
+static Client *scroller_action_head(const Arg *arg, Monitor **monitor,
+								struct ScrollerStackNode **node) {
+	Client *c;
+	if (!server.selected_monitor || server.selected_monitor->isoverview ||
+		!is_scroller_layout(server.selected_monitor))
+		return NULL;
+	c = arg->tc ? arg->tc : server.selected_monitor->sel;
+	if (!c || c->isfloating)
+		return NULL;
+	c = scroll_get_stack_head_client(c);
+	*monitor = c->mon;
+	*node = find_scroller_node((*monitor)->pertag->scroller_state[
+										 get_mon_curtag(*monitor)], c);
+	return c;
+}
+
+void set_column_size(const Arg *arg) {
+	Monitor *m = NULL;
+	struct ScrollerStackNode *node = NULL;
+	Client *c = scroller_action_head(arg, &m, &node);
+	bool is_proportion = false;
+	float proportion;
+	if (!c || !arg->v)
+		return;
+	proportion = parse_scroller_size(arg->v, scroller_primary_extent(m),
+									 &is_proportion);
+	if (proportion < 0.0f)
+		return;
+	proportion = bounded_scroller_proportion(m, proportion);
+	if (node) {
+		node->scroller_proportion = proportion;
+		node->full_width = false;
+	}
+	c->scroller_proportion = proportion;
+	(void)is_proportion;
+	arrange(m, false, false);
+}
+
+void adjust_column_size(const Arg *arg) {
+	Monitor *m = NULL;
+	struct ScrollerStackNode *node = NULL;
+	Client *c = scroller_action_head(arg, &m, &node);
+	char *end = NULL;
+	float delta;
+	if (!c || !arg->v || !*arg->v)
+		return;
+	delta = strtof(arg->v, &end);
+	if (end == arg->v)
+		return;
+	while (*end == ' ' || *end == '\t')
+		end++;
+	if (*end == '%')
+		delta /= 100.0f;
+	else if (*end == '\0')
+		delta /= scroller_primary_extent(m);
+	else
+		return;
+	float current = node ? node->scroller_proportion : c->scroller_proportion;
+	float proportion = bounded_scroller_proportion(m, current + delta);
+	if (node) {
+		node->scroller_proportion = proportion;
+		node->full_width = false;
+	}
+	c->scroller_proportion = proportion;
+	arrange(m, false, false);
+}
+
+void toggle_full_width_column(const Arg *arg) {
+	Monitor *m = NULL;
+	struct ScrollerStackNode *node = NULL;
+	Client *c = scroller_action_head(arg, &m, &node);
+	if (!c || !node)
+		return;
+	if (node->full_width) {
+		node->scroller_proportion = bounded_scroller_proportion(
+			m, node->saved_scroller_proportion);
+		node->full_width = false;
+	} else {
+		node->saved_scroller_proportion = node->scroller_proportion;
+		node->scroller_proportion = 1.0f;
+		node->full_width = true;
+	}
+	c->scroller_proportion = node->scroller_proportion;
+	arrange(m, false, false);
 }
 
 void switch_proportion_preset(const Arg *arg) {
@@ -1034,6 +1162,7 @@ void switch_proportion_preset(const Arg *arg) {
 
 	if (target_proportion == 0.0f)
 		target_proportion = config.scroller_proportion_preset[0];
+	target_proportion = bounded_scroller_proportion(m, target_proportion);
 
 	if (node)
 		node->scroller_proportion = target_proportion;
@@ -1849,6 +1978,13 @@ void toggle_maximize_screen(const Arg *arg) {
 	Client *sel = arg->tc ? arg->tc : client_focus_top(server.selected_monitor);
 	if (!sel)
 		return;
+	if (config.scroller_niri_view &&
+		config.scroller_restore_stack_after_maximize && sel->mon &&
+		is_scroller_layout(sel->mon) && !sel->isfloating) {
+		scroller_toggle_maximized(sel);
+		client_update_border_color(sel);
+		return;
+	}
 
 	sel->is_scratchpad_show = 0;
 	sel->is_in_scratchpad = 0;

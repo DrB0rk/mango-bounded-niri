@@ -263,7 +263,7 @@ void tablet_tool_motion(struct TabletTool *tool, bool change_x, bool change_y,
 		 (server.selected_monitor && server.selected_monitor->sel &&
 		  c != server.selected_monitor->sel)) &&
 		!client_is_unmanaged(c))
-		client_focus(c, 0);
+		client_focus_with_origin(c, 0, FOCUS_TABLET);
 
 	if (surface && !wlr_surface_accepts_tablet_v2(surface, tablet->tablet_v2))
 		surface = NULL;

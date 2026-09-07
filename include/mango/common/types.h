@@ -30,6 +30,15 @@ typedef struct LastCursor LastCursor;
 typedef struct MangoJumpLabel MangoJumpLabel;
 typedef struct MangoGroupBar MangoGroupBar;
 
+enum FocusOrigin {
+	FOCUS_KEYBOARD,
+	FOCUS_POINTER,
+	FOCUS_TABLET,
+	FOCUS_IPC,
+	FOCUS_ACTIVATION,
+	FOCUS_MAP,
+};
+
 /*
  * Forward declarations for libwayland / wlroots / scenefx structs referenced by
  * module headers. Translation units that need the actual definitions include

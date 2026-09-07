@@ -141,6 +141,7 @@ struct MangoServer {
 	int32_t axis_apply_time;
 	int32_t axis_apply_dir;
 	int32_t scroller_focus_lock;
+	enum FocusOrigin focus_origin;
 
 	uint32_t swipe_fingers;
 	double swipe_dx;

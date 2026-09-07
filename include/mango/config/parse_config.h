@@ -322,6 +322,15 @@ typedef struct {
 	int32_t scroller_focus_center;
 	int32_t scroller_prefer_center;
 	int32_t scroller_prefer_overspread;
+	int32_t scroller_niri_view;
+	int32_t scroller_stack_max;
+	int32_t scroller_auto_stack_every;
+	float scroller_min_proportion;
+	char scroller_pointer_focus_mode[16];
+	int32_t scroller_restore_stack_after_maximize;
+	int32_t scroller_niri_gap_drop;
+	int32_t scroller_view_gesture_fingers;
+	int32_t scroller_dnd_edge_scroll;
 	int32_t edge_scroller_pointer_focus;
 	double edge_scroller_focus_allow_speed;
 	int32_t focus_cross_monitor;

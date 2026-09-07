@@ -290,9 +290,41 @@ void arrange_stack_vertical_node(struct ScrollerStackNode *head,
 	}
 }
 
+static bool arrange_bounded_maximized(Monitor *m,
+									struct TagScrollerState *st, bool vertical) {
+	Client *max = st->maximized_tile;
+	if (!max || max->mon != m || !VISIBLEON(max, m) || !ISSCROLLTILED(max)) {
+		st->maximized_tile = NULL;
+		return false;
+	}
+	struct ScrollerStackNode *node = find_scroller_node(st, max);
+	if (!node)
+		return false;
+	struct ScrollerStackNode *head = node;
+	while (head->prev_in_stack)
+		head = head->prev_in_stack;
+	for (struct ScrollerStackNode *n = head; n; n = n->next_in_stack)
+		if (n->client->scene)
+			wlr_scene_node_set_enabled(&n->client->scene->node, n->client == max);
+	struct wlr_box box = {
+		.x = m->w.x + (server.enable_gaps ? m->gappoh : 0),
+		.y = m->w.y + (server.enable_gaps ? m->gappov : 0),
+		.width = m->w.width - 2 * (server.enable_gaps ? m->gappoh : 0),
+		.height = m->w.height - 2 * (server.enable_gaps ? m->gappov : 0),
+	};
+	if (vertical)
+		vertical_scroll_adjust_fullandmax(max, &box);
+	else
+		horizontal_scroll_adjust_fullandmax(max, &box);
+	client_tile_resize(max, box, 0);
+	return true;
+}
+
 void scroller(Monitor *m) {
 	uint32_t tag = get_mon_curtag(m);
 	struct TagScrollerState *st = ensure_scroller_state(m, tag);
+	if (st->maximized_tile && arrange_bounded_maximized(m, st, false))
+		return;
 	Client *c = NULL;
 	float scroller_default_proportion_single =
 		m->pertag->scroller_default_proportion_single[tag];
@@ -353,7 +385,8 @@ void scroller(Monitor *m) {
 		m->w.width - 2 * config.scroller_structs - cur_gappih;
 
 	/* Single-client special case. */
-	if (n_heads == 1 && !scroller_ignore_proportion_single &&
+	if (n_heads == 1 && !heads[0]->full_width &&
+		!scroller_ignore_proportion_single &&
 		!heads[0]->client->isfullscreen &&
 		!heads[0]->client->ismaximizescreen) {
 		struct ScrollerStackNode *head = heads[0];
@@ -538,6 +571,10 @@ void vertical_scroller(Monitor *m) {
 	uint32_t tag = get_mon_curtag(m);
 	int32_t bar_height = 0;
 	struct TagScrollerState *st = ensure_scroller_state(m, tag);
+	if (st->maximized_tile && st->maximized_tile->mon != m)
+		st->maximized_tile = NULL;
+	if (st->maximized_tile && arrange_bounded_maximized(m, st, true))
+		return;
 	Client *c = NULL;
 	float scroller_default_proportion_single =
 		m->pertag->scroller_default_proportion_single[tag];
@@ -593,7 +630,8 @@ void vertical_scroller(Monitor *m) {
 	int32_t max_client_height =
 		m->w.height - 2 * config.scroller_structs - cur_gappiv;
 
-	if (n_heads == 1 && !scroller_ignore_proportion_single &&
+	if (n_heads == 1 && !heads[0]->full_width &&
+		!scroller_ignore_proportion_single &&
 		!heads[0]->client->isfullscreen &&
 		!heads[0]->client->ismaximizescreen) {
 		struct ScrollerStackNode *head = heads[0];
@@ -789,10 +827,12 @@ void vertical_scroller(Monitor *m) {
 void scroller_remove_client(Client *c) {
 	Monitor *m;
 	wl_list_for_each(m, &server.monitors, link) {
-		for (uint32_t t = 0; t < PERTAG_SLOTS; t++) {
+	for (uint32_t t = 0; t < PERTAG_SLOTS; t++) {
 			struct TagScrollerState *st = m->pertag->scroller_state[t];
 			if (!st)
 				continue;
+			if (st->maximized_tile == c)
+				st->maximized_tile = NULL;
 			struct ScrollerStackNode *node = find_scroller_node(st, c);
 			if (node) {
 				scroller_node_remove(st, node);
@@ -804,6 +844,10 @@ void scroller_remove_client(Client *c) {
 void scroller_insert_stack(Client *c, Client *target_client,
 						   bool insert_before) {
 	if (!target_client || target_client->mon != c->mon)
+		return;
+	if (config.scroller_niri_view && config.scroller_stack_max > 0 &&
+		c != target_client &&
+		scroller_stack_size(target_client) >= config.scroller_stack_max)
 		return;
 
 	if (c->isfullscreen)
@@ -937,6 +981,48 @@ Client *scroll_get_stack_tail_client(Client *c) {
 		}
 	}
 	return c;
+}
+
+int scroller_stack_size(Client *c) {
+	int count = 0;
+	if (!c || !c->mon)
+		return 0;
+	uint32_t tag = get_client_tag_idx(c);
+	struct TagScrollerState *st = c->mon->pertag->scroller_state[tag];
+	struct ScrollerStackNode *n = st ? find_scroller_node(st, c) : NULL;
+	if (!n)
+		return 0;
+	while (n->prev_in_stack)
+		n = n->prev_in_stack;
+	for (; n; n = n->next_in_stack)
+		count++;
+	return count;
+}
+
+void scroller_toggle_maximized(Client *c) {
+	if (!c || !c->mon || c->isfloating || !config.scroller_niri_view ||
+		!config.scroller_restore_stack_after_maximize ||
+		!is_scroller_layout(c->mon))
+		return;
+	Monitor *m = c->mon;
+	uint32_t tag = get_mon_curtag(m);
+	struct TagScrollerState *st = ensure_scroller_state(m, tag);
+	struct ScrollerStackNode *node = find_scroller_node(st, c);
+	if (!node)
+		return;
+	if (st->maximized_tile == c) {
+		st->maximized_tile = NULL;
+		struct ScrollerStackNode *head = node;
+		while (head->prev_in_stack)
+			head = head->prev_in_stack;
+		for (struct ScrollerStackNode *n = head; n; n = n->next_in_stack)
+			if (n->client->scene)
+				wlr_scene_node_set_enabled(&n->client->scene->node, true);
+		arrange(m, false, false);
+		return;
+	}
+	st->maximized_tile = c;
+	arrange(m, false, false);
 }
 
 void update_scroller_state(Monitor *m) {

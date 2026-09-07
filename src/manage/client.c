@@ -50,6 +50,36 @@
 /* Placeholder appid/title used when no client surface type can be matched. */
 static const char broken[] = "broken";
 
+static void apply_bounded_scroller_map_policy(Client *c) {
+	if (!c || !c->mon || !config.scroller_niri_view || c->isfloating ||
+		!is_scroller_layout(c->mon) || config.scroller_auto_stack_every <= 0)
+		return;
+
+	uint32_t tag = get_mon_curtag(c->mon);
+	int live_tiled = 0;
+	Client *target = c->mon->prevsel;
+	Client *iter;
+	wl_list_for_each(iter, &server.clients, link) {
+		if (VISIBLEON(iter, c->mon) && ISSCROLLTILED(iter))
+			live_tiled++;
+	}
+
+	/* The phase is based on the new live set: W3, W6, W9, ... */
+	if (live_tiled < config.scroller_auto_stack_every ||
+		live_tiled % config.scroller_auto_stack_every != 0)
+		return;
+	if (!target || target == c || target->mon != c->mon ||
+		!VISIBLEON(target, c->mon) || target->isfloating ||
+		get_client_tag_idx(target) != tag)
+		return;
+
+	update_scroller_state(c->mon);
+	if (config.scroller_stack_max > 0 &&
+		scroller_stack_size(target) >= config.scroller_stack_max)
+		return;
+	scroller_insert_stack(c, target, false);
+}
+
 int32_t client_is_x11(Client *c) {
 #ifdef XWAYLAND
 	return c->type == X11;
@@ -1441,6 +1471,7 @@ void client_apply_rules(Client *c) {
 
 	client_set_monitor(c, mon, newtags, should_init_get_focus);
 	client_reparent_group(c);
+	apply_bounded_scroller_map_policy(c);
 
 	if (!c->isfloating) {
 		c->old_stack_inner_per = c->stack_inner_per;
@@ -2432,7 +2463,8 @@ void client_set_opacity(Client *c, double opacity) {
 								   scene_buffer_apply_opacity, &opacity);
 }
 
-void client_focus(Client *c, int32_t lift) {
+void client_focus_with_origin(Client *c, int32_t lift,
+							  enum FocusOrigin origin) {
 
 	Client *last_focus_client = NULL;
 	Monitor *um = NULL;
@@ -2497,7 +2529,10 @@ void client_focus(Client *c, int32_t lift) {
 		wl_list_remove(&c->flink);
 		wl_list_insert(&server.focus_stack, &c->flink);
 
-		if (c && server.selected_monitor->prevsel &&
+		if ((!config.scroller_niri_view ||
+			 strcmp(config.scroller_pointer_focus_mode, "keep-view") != 0 ||
+			 (origin != FOCUS_POINTER && origin != FOCUS_TABLET)) &&
+			c && server.selected_monitor->prevsel &&
 			TAGMATCH(server.selected_monitor->prevsel,
 					 server.selected_monitor) &&
 			TAGMATCH(c, server.selected_monitor) && !c->isfloating &&
@@ -2692,6 +2727,10 @@ toggleseltags:
 		client_focus(client_focus_top(m), 1);
 	arrange(m, want_animation, true);
 	printstatus(IPC_WATCH_ARRANGGE);
+}
+
+void client_focus(Client *c, int32_t lift) {
+	client_focus_with_origin(c, lift, FOCUS_KEYBOARD);
 }
 
 void client_switch_view(const Arg *arg, bool want_animation) {

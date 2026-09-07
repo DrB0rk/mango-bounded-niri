@@ -15,12 +15,15 @@ struct ScrollerStackNode {
 	struct ScrollerStackNode *next_in_stack;
 	struct ScrollerStackNode *prev_in_stack;
 	struct ScrollerStackNode *all_next;
+	bool full_width;
+	float saved_scroller_proportion;
 };
 
 struct TagScrollerState {
 	struct ScrollerStackNode
 		*all_first; /* Singly linked list head for all nodes. */
 	int count;
+	Client *maximized_tile;
 };
 
 /* Gets or creates the scroller state for a given tag of the specified monitor.
@@ -54,6 +57,8 @@ void scroller_insert_stack(Client *c, Client *target_client,
 void scroller_drop_tile(Client *c, Client *closest, int vertical);
 Client *scroll_get_stack_head_client(Client *c);
 Client *scroll_get_stack_tail_client(Client *c);
+int scroller_stack_size(Client *c);
+void scroller_toggle_maximized(Client *c);
 void update_scroller_state(Monitor *m);
 void scroller_swap_nodes_in_same_stack(struct ScrollerStackNode *n1,
 									   struct ScrollerStackNode *n2);

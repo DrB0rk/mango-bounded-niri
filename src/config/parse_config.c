@@ -491,6 +491,25 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->scroller_prefer_center = atoi(value);
 	} else if (strcmp(key, "scroller_prefer_overspread") == 0) {
 		config->scroller_prefer_overspread = atoi(value);
+	} else if (strcmp(key, "scroller_niri_view") == 0) {
+		config->scroller_niri_view = atoi(value);
+	} else if (strcmp(key, "scroller_stack_max") == 0) {
+		config->scroller_stack_max = atoi(value);
+	} else if (strcmp(key, "scroller_auto_stack_every") == 0) {
+		config->scroller_auto_stack_every = atoi(value);
+	} else if (strcmp(key, "scroller_min_proportion") == 0) {
+		config->scroller_min_proportion = atof(value);
+	} else if (strcmp(key, "scroller_pointer_focus_mode") == 0) {
+		snprintf(config->scroller_pointer_focus_mode,
+				 sizeof(config->scroller_pointer_focus_mode), "%.15s", value);
+	} else if (strcmp(key, "scroller_restore_stack_after_maximize") == 0) {
+		config->scroller_restore_stack_after_maximize = atoi(value);
+	} else if (strcmp(key, "scroller_niri_gap_drop") == 0) {
+		config->scroller_niri_gap_drop = atoi(value);
+	} else if (strcmp(key, "scroller_view_gesture_fingers") == 0) {
+		config->scroller_view_gesture_fingers = atoi(value);
+	} else if (strcmp(key, "scroller_dnd_edge_scroll") == 0) {
+		config->scroller_dnd_edge_scroll = atoi(value);
 	} else if (strcmp(key, "edge_scroller_pointer_focus") == 0) {
 		config->edge_scroller_pointer_focus = atoi(value);
 	} else if (strcmp(key, "edge_scroller_focus_allow_speed") == 0) {
@@ -3566,6 +3585,26 @@ void override_config(void) {
 		CLAMP_INT(config.scroller_prefer_center, 0, 1);
 	config.scroller_prefer_overspread =
 		CLAMP_INT(config.scroller_prefer_overspread, 0, 1);
+	config.scroller_niri_view = CLAMP_INT(config.scroller_niri_view, 0, 1);
+	config.scroller_stack_max = CLAMP_INT(config.scroller_stack_max, 0, 1000);
+	config.scroller_auto_stack_every =
+		CLAMP_INT(config.scroller_auto_stack_every, 0, 1000);
+	config.scroller_min_proportion =
+		CLAMP_FLOAT(config.scroller_min_proportion, 0.0f, 1.0f);
+	if (config.scroller_niri_view && config.scroller_min_proportion < 0.5f)
+		config.scroller_min_proportion = 0.5f;
+	if (strcmp(config.scroller_pointer_focus_mode, "scroll") != 0 &&
+		strcmp(config.scroller_pointer_focus_mode, "reject-scroll") != 0 &&
+		strcmp(config.scroller_pointer_focus_mode, "keep-view") != 0)
+		snprintf(config.scroller_pointer_focus_mode,
+				 sizeof(config.scroller_pointer_focus_mode), "scroll");
+	config.scroller_restore_stack_after_maximize =
+		CLAMP_INT(config.scroller_restore_stack_after_maximize, 0, 1);
+	config.scroller_niri_gap_drop = CLAMP_INT(config.scroller_niri_gap_drop, 0, 1);
+	config.scroller_view_gesture_fingers =
+		CLAMP_INT(config.scroller_view_gesture_fingers, 0, 10);
+	config.scroller_dnd_edge_scroll =
+		CLAMP_INT(config.scroller_dnd_edge_scroll, 0, 1);
 	config.edge_scroller_pointer_focus =
 		CLAMP_INT(config.edge_scroller_pointer_focus, 0, 1);
 	config.edge_scroller_focus_allow_speed =
@@ -3820,6 +3859,16 @@ void set_value_default() {
 	config.scroller_focus_center = 0;
 	config.scroller_prefer_center = 0;
 	config.scroller_prefer_overspread = 1;
+	config.scroller_niri_view = 0;
+	config.scroller_stack_max = 0;
+	config.scroller_auto_stack_every = 0;
+	config.scroller_min_proportion = 0.0f;
+	snprintf(config.scroller_pointer_focus_mode,
+			 sizeof(config.scroller_pointer_focus_mode), "scroll");
+	config.scroller_restore_stack_after_maximize = 0;
+	config.scroller_niri_gap_drop = 0;
+	config.scroller_view_gesture_fingers = 0;
+	config.scroller_dnd_edge_scroll = 0;
 	config.edge_scroller_pointer_focus = 1;
 	config.edge_scroller_focus_allow_speed = 0.0f;
 	config.focus_cross_monitor = 0;
@@ -4581,6 +4630,14 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	} else if (strcmp(func_name, "switch_proportion_preset") == 0) {
 		func = switch_proportion_preset;
 		(*arg).i = parse_circle_direction(arg_value);
+	} else if (strcmp(func_name, "set_column_size") == 0) {
+		func = set_column_size;
+		(*arg).v = strdup(arg_value);
+	} else if (strcmp(func_name, "adjust_column_size") == 0) {
+		func = adjust_column_size;
+		(*arg).v = strdup(arg_value);
+	} else if (strcmp(func_name, "toggle_full_width_column") == 0) {
+		func = toggle_full_width_column;
 	} else if (strcmp(func_name, "viewtoleft") == 0) {
 		func = view_to_left;
 		(*arg).i = atoi(arg_value);
