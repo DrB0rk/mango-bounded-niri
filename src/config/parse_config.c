@@ -574,6 +574,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->drag_tile_refresh_interval = atof(value);
 	} else if (strcmp(key, "drag_floating_refresh_interval") == 0) {
 		config->drag_floating_refresh_interval = atof(value);
+	} else if (strcmp(key, "drop_strip_ratio") == 0) {
+		config->drop_strip_ratio = atof(value);
 	} else if (strcmp(key, "allow_tearing") == 0) {
 		config->allow_tearing = atoi(value);
 	} else if (strcmp(key, "hdr_depth") == 0) {
@@ -1133,6 +1135,38 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		} else {
 			convert_hex_to_rgba(config->dropcolor, color);
 		}
+	} else if (strcmp(key, "dropcolor_left") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			mango_error(false, WLR_ERROR, "Invalid dropcolor_left format: %s\n",
+						value);
+			return false;
+		}
+		convert_hex_to_rgba(config->dropcolor_left, color);
+	} else if (strcmp(key, "dropcolor_right") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			mango_error(false, WLR_ERROR,
+						"Invalid dropcolor_right format: %s\n", value);
+			return false;
+		}
+		convert_hex_to_rgba(config->dropcolor_right, color);
+	} else if (strcmp(key, "dropcolor_up") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			mango_error(false, WLR_ERROR, "Invalid dropcolor_up format: %s\n",
+						value);
+			return false;
+		}
+		convert_hex_to_rgba(config->dropcolor_up, color);
+	} else if (strcmp(key, "dropcolor_down") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			mango_error(false, WLR_ERROR, "Invalid dropcolor_down format: %s\n",
+						value);
+			return false;
+		}
+		convert_hex_to_rgba(config->dropcolor_down, color);
 	} else if (strcmp(key, "splitcolor") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
@@ -3600,7 +3634,8 @@ void override_config(void) {
 				 sizeof(config.scroller_pointer_focus_mode), "scroll");
 	config.scroller_restore_stack_after_maximize =
 		CLAMP_INT(config.scroller_restore_stack_after_maximize, 0, 1);
-	config.scroller_niri_gap_drop = CLAMP_INT(config.scroller_niri_gap_drop, 0, 1);
+	config.scroller_niri_gap_drop =
+		CLAMP_INT(config.scroller_niri_gap_drop, 0, 1);
 	config.scroller_view_gesture_fingers =
 		CLAMP_INT(config.scroller_view_gesture_fingers, 0, 10);
 	config.scroller_dnd_edge_scroll =
@@ -3645,6 +3680,7 @@ void override_config(void) {
 		CLAMP_FLOAT(config.drag_tile_refresh_interval, 1.0f, 16.0f);
 	config.drag_floating_refresh_interval =
 		CLAMP_FLOAT(config.drag_floating_refresh_interval, 0.0f, 1000.0f);
+	config.drop_strip_ratio = CLAMP_FLOAT(config.drop_strip_ratio, 0.1f, 0.9f);
 	config.drag_tile_to_tile = CLAMP_INT(config.drag_tile_to_tile, 0, 1);
 	config.drag_tile_small = CLAMP_INT(config.drag_tile_small, 0, 1);
 	config.allow_tearing = CLAMP_INT(config.allow_tearing, 0, 2);
@@ -3884,8 +3920,9 @@ void set_value_default() {
 	config.xwayland_ignore_scale = 0;
 	config.syncobj_enable = 1;
 	config.tag_carousel = 0;
-	config.drag_tile_refresh_interval = 8.0f;
-	config.drag_floating_refresh_interval = 8.0f;
+	config.drag_tile_refresh_interval = 4.0f; /* More responsive drag preview */
+	config.drag_floating_refresh_interval = 4.0f;
+	config.drop_strip_ratio = 0.25f;
 	config.allow_tearing = TEARING_DISABLED;
 	config.hdr_depth = MANGO_RENDER_BIT_DEPTH_10;
 	config.allow_shortcuts_inhibit = SHORTCUTS_INHIBIT_ENABLE;
@@ -4056,10 +4093,29 @@ void set_value_default() {
 	config.bordercolor[1] = 0x44 / 255.0f;
 	config.bordercolor[2] = 0x44 / 255.0f;
 	config.bordercolor[3] = 1.0f;
-	config.dropcolor[0] = 0xd5 / 255.0f;
-	config.dropcolor[1] = 0x89 / 255.0f;
-	config.dropcolor[2] = 0x9d / 255.0f;
-	config.dropcolor[3] = 0.5f;
+	config.dropcolor[0] = 0x5e / 255.0f; /* More visible blue-green */
+	config.dropcolor[1] = 0x98 / 255.0f;
+	config.dropcolor[2] = 0x7c / 255.0f;
+	config.dropcolor[3] = 0.75f; /* Higher opacity for better visibility */
+
+	/* Bounded-Niri: direction-specific drop colors - makes preview clearer */
+	config.dropcolor_left[0] = 0x5e / 255.0f; /* Blue for LEFT */
+	config.dropcolor_left[1] = 0x7c / 255.0f;
+	config.dropcolor_left[2] = 0x98 / 255.0f;
+	config.dropcolor_left[3] = 0.75f;
+	config.dropcolor_right[0] = 0x5e / 255.0f; /* Green for RIGHT */
+	config.dropcolor_right[1] = 0x98 / 255.0f;
+	config.dropcolor_right[2] = 0x7c / 255.0f;
+	config.dropcolor_right[3] = 0.75f;
+	config.dropcolor_up[0] = 0x98 / 255.0f; /* Yellow-ish for UP */
+	config.dropcolor_up[1] = 0x7c / 255.0f;
+	config.dropcolor_up[2] = 0x5e / 255.0f;
+	config.dropcolor_up[3] = 0.75f;
+	config.dropcolor_down[0] = 0x98 / 255.0f; /* Purple-ish for DOWN */
+	config.dropcolor_down[1] = 0x5e / 255.0f;
+	config.dropcolor_down[2] = 0x7c / 255.0f;
+	config.dropcolor_down[3] = 0.75f;
+
 	config.splitcolor[0] = 0xeb / 255.0f;
 	config.splitcolor[1] = 0x44 / 255.0f;
 	config.splitcolor[2] = 0x1e / 255.0f;
@@ -4896,10 +4952,10 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	} else if (strcmp(func_name, "scroller_axis_navigate") == 0) {
 		func = scroller_axis_navigate;
 		/* arg->i: 0 = backward along primary axis, 1 = forward. */
-		if (arg_value && (arg_value[0] == 'p' || arg_value[0] == 'P' ||
-						  arg_value[0] == 'f' || arg_value[0] == 'F' ||
-						  strcmp(arg_value, "next") == 0 ||
-						  strcmp(arg_value, "1") == 0))
+		if (arg_value &&
+			(arg_value[0] == 'p' || arg_value[0] == 'P' ||
+			 arg_value[0] == 'f' || arg_value[0] == 'F' ||
+			 strcmp(arg_value, "next") == 0 || strcmp(arg_value, "1") == 0))
 			(*arg).i = 1;
 		else
 			(*arg).i = 0;

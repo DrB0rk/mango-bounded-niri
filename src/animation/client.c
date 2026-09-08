@@ -864,6 +864,78 @@ void client_set_drop_area(Client *c) {
 				drop_box.height = client_height;
 			}
 		}
+	} else if (cur_layout->id == SCROLLER ||
+			   cur_layout->id == VERTICAL_SCROLLER) {
+		/* Bounded-Niri: the preview must match scroller_drop_tile semantics.
+		 * Primary-axis drops (LEFT/RIGHT in scroller, UP/DOWN in
+		 * vertical_scroller) insert a NEW column beside the target; the
+		 * cross-axis drops join the target's stack. Render a thin edge strip
+		 * for the column insert (reads as "new column here") and a half
+		 * split for the stack join. */
+		double dist_left = rel_x;
+		double dist_right = client_width - rel_x;
+		double dist_top = rel_y;
+		double dist_bottom = client_height - rel_y;
+
+		bool horizontal = cur_layout->id == SCROLLER;
+		int32_t strip_size = (int32_t)(config.drop_strip_ratio *
+									   (horizontal ? (double)client_width
+												   : (double)client_height));
+
+		if (dist_left <= dist_right && dist_left <= dist_top &&
+			dist_left <= dist_bottom) {
+			drop_direction = LEFT;
+			if (horizontal) {
+				drop_box.x = bw;
+				drop_box.y = bw;
+				drop_box.width = strip_size;
+				drop_box.height = client_height;
+			} else {
+				drop_box.x = bw;
+				drop_box.y = bw;
+				drop_box.width = client_width / 2;
+				drop_box.height = client_height;
+			}
+		} else if (dist_right <= dist_top && dist_right <= dist_bottom) {
+			drop_direction = RIGHT;
+			if (horizontal) {
+				drop_box.x = bw + client_width - strip_size;
+				drop_box.y = bw;
+				drop_box.width = strip_size;
+				drop_box.height = client_height;
+			} else {
+				drop_box.x = bw + client_width / 2;
+				drop_box.y = bw;
+				drop_box.width = client_width / 2;
+				drop_box.height = client_height;
+			}
+		} else if (dist_top <= dist_bottom) {
+			drop_direction = UP;
+			if (horizontal) {
+				drop_box.x = bw;
+				drop_box.y = bw;
+				drop_box.width = client_width;
+				drop_box.height = client_height / 2;
+			} else {
+				drop_box.x = bw;
+				drop_box.y = bw;
+				drop_box.width = client_width;
+				drop_box.height = strip_size;
+			}
+		} else {
+			drop_direction = DOWN;
+			if (horizontal) {
+				drop_box.x = bw;
+				drop_box.y = bw + client_height / 2;
+				drop_box.width = client_width;
+				drop_box.height = client_height / 2;
+			} else {
+				drop_box.x = bw;
+				drop_box.y = bw + client_height - strip_size;
+				drop_box.width = client_width;
+				drop_box.height = strip_size;
+			}
+		}
 	} else {
 		double dist_left = rel_x;
 		double dist_right = client_width - rel_x;
@@ -901,6 +973,20 @@ void client_set_drop_area(Client *c) {
 	if (!first_draw && c->drop_direction == drop_direction)
 		return;
 	c->drop_direction = drop_direction;
+
+	/* Bounded-Niri: use direction-specific drop colors for better visual
+	 * feedback */
+	float *color = config.dropcolor;
+	if (drop_direction == LEFT) {
+		color = config.dropcolor_left;
+	} else if (drop_direction == RIGHT) {
+		color = config.dropcolor_right;
+	} else if (drop_direction == UP) {
+		color = config.dropcolor_up;
+	} else if (drop_direction == DOWN) {
+		color = config.dropcolor_down;
+	}
+	wlr_scene_rect_set_color(c->droparea, color);
 
 	wlr_scene_node_set_position(&c->droparea->node, drop_box.x, drop_box.y);
 	wlr_scene_rect_set_size(c->droparea, drop_box.width, drop_box.height);

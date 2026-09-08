@@ -969,8 +969,8 @@ void set_proportion(const Arg *arg) {
 
 	float proportion = arg->f;
 	if (config.scroller_niri_view)
-		proportion = CLAMP_FLOAT(proportion, config.scroller_min_proportion,
-							 1.0f);
+		proportion =
+			CLAMP_FLOAT(proportion, config.scroller_min_proportion, 1.0f);
 	if (node) {
 		node->scroller_proportion = proportion;
 		node->full_width = false;
@@ -994,7 +994,7 @@ static float bounded_scroller_proportion(Monitor *m, float proportion) {
 static float scroller_primary_extent(Monitor *m) {
 	uint32_t tag = get_mon_curtag(m);
 	return m->pertag->ltidxs[tag]->id == VERTICAL_SCROLLER ? m->w.height
-																		 : m->w.width;
+														   : m->w.width;
 }
 
 static float parse_scroller_size(const char *value, float extent,
@@ -1019,7 +1019,7 @@ static float parse_scroller_size(const char *value, float extent,
 }
 
 static Client *scroller_action_head(const Arg *arg, Monitor **monitor,
-								struct ScrollerStackNode **node) {
+									struct ScrollerStackNode **node) {
 	Client *c;
 	if (!server.selected_monitor || server.selected_monitor->isoverview ||
 		!is_scroller_layout(server.selected_monitor))
@@ -1029,8 +1029,8 @@ static Client *scroller_action_head(const Arg *arg, Monitor **monitor,
 		return NULL;
 	c = scroll_get_stack_head_client(c);
 	*monitor = c->mon;
-	*node = find_scroller_node((*monitor)->pertag->scroller_state[
-										 get_mon_curtag(*monitor)], c);
+	*node = find_scroller_node(
+		(*monitor)->pertag->scroller_state[get_mon_curtag(*monitor)], c);
 	return c;
 }
 
@@ -1048,8 +1048,8 @@ void set_column_size(const Arg *arg) {
 	float proportion;
 	if (!c || !arg->v)
 		return;
-	proportion = parse_scroller_size(arg->v, scroller_primary_extent(m),
-									 &is_proportion);
+	proportion =
+		parse_scroller_size(arg->v, scroller_primary_extent(m), &is_proportion);
 	if (proportion < 0.0f)
 		return;
 	proportion = bounded_scroller_proportion(m, proportion);
@@ -1066,7 +1066,8 @@ void set_column_size(const Arg *arg) {
  * action. The arg is a delta — either a percentage of the monitor's
  * primary axis (e.g. "+5%" / "-5%") or a fixed pixel count (e.g. "+90").
  * Result is clamped to the bounded floor scroller_min_proportion.
- * Algorithm from Niri pinned commit dd75865f547f0eac0e9b6c4d86d2cd00c0744252. */
+ * Algorithm from Niri pinned commit dd75865f547f0eac0e9b6c4d86d2cd00c0744252.
+ */
 void adjust_column_size(const Arg *arg) {
 	Monitor *m = NULL;
 	struct ScrollerStackNode *node = NULL;
@@ -1108,8 +1109,8 @@ void toggle_full_width_column(const Arg *arg) {
 	if (!c || !node)
 		return;
 	if (node->full_width) {
-		node->scroller_proportion = bounded_scroller_proportion(
-			m, node->saved_scroller_proportion);
+		node->scroller_proportion =
+			bounded_scroller_proportion(m, node->saved_scroller_proportion);
 		node->full_width = false;
 	} else {
 		node->saved_scroller_proportion = node->scroller_proportion;
@@ -2695,8 +2696,7 @@ void scroller_axis_navigate(const Arg *arg) {
 		return;
 
 	uint32_t tag = get_client_tag_idx(c);
-	bool horizontal =
-		(m->pertag->ltidxs[tag]->id == SCROLLER);
+	bool horizontal = (m->pertag->ltidxs[tag]->id == SCROLLER);
 
 	int32_t direction;
 	if (horizontal) {

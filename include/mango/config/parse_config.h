@@ -473,6 +473,12 @@ typedef struct {
 	float rootcolor[4];
 	float bordercolor[4];
 	float dropcolor[4];
+	/* Bounded-Niri: direction-specific drop colors for better visual feedback.
+	 * Makes it clearer where the window will land (left/right/up/down). */
+	float dropcolor_left[4];
+	float dropcolor_right[4];
+	float dropcolor_up[4];
+	float dropcolor_down[4];
 	float splitcolor[4];
 	float focuscolor[4];
 	float maximizescreencolor[4];
@@ -533,6 +539,10 @@ typedef struct {
 	int32_t tag_carousel;
 	float drag_tile_refresh_interval;
 	float drag_floating_refresh_interval;
+	/* Bounded-Niri: width of the drop-preview strip (fraction of the target
+	 * client's primary-axis size) shown when a drag will insert a new
+	 * scroller column beside the target. */
+	float drop_strip_ratio;
 	int32_t allow_tearing;
 	int32_t allow_shortcuts_inhibit;
 	int32_t allow_lock_transparent;

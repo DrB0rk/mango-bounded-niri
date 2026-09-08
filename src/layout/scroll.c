@@ -290,13 +290,26 @@ void arrange_stack_vertical_node(struct ScrollerStackNode *head,
 	}
 }
 
+/* Bounded-Niri: helper to re-enable all scroller columns. Used when
+ * transitioning from maximized/fullscreen back to normal layout. */
+static void scroller_reenable_all_columns(struct TagScrollerState *st) {
+	for (struct ScrollerStackNode *n = st->all_first; n; n = n->all_next) {
+		if (n->client->scene) {
+			wlr_scene_node_set_enabled(&n->client->scene->node, true);
+		}
+	}
+}
+
 /* Bounded-Niri: reversible maximize. The clipped siblings stay in the
  * stack (only their scene nodes are disabled) so un-toggle restores the
  * prior column without re-mapping. Algorithm ported from Niri's column
  * maximize path at pinned commit dd75865f547f0eac0e9b6c4d86d2cd00c0744252.
- * License: GPL-3.0-or-later, compatible with Mango's terms. */
-static bool arrange_bounded_maximized(Monitor *m,
-									struct TagScrollerState *st, bool vertical) {
+ * License: GPL-3.0-or-later, compatible with Mango's terms.
+ *
+ * When maximized, disables ALL other columns (not just stack siblings) so they
+ * don't appear "under" the maximized window. Matches Niri's behavior. */
+static bool arrange_bounded_maximized(Monitor *m, struct TagScrollerState *st,
+									  bool vertical) {
 	Client *max = st->maximized_tile;
 	if (!max || max->mon != m || !VISIBLEON(max, m) || !ISSCROLLTILED(max)) {
 		st->maximized_tile = NULL;
@@ -305,12 +318,14 @@ static bool arrange_bounded_maximized(Monitor *m,
 	struct ScrollerStackNode *node = find_scroller_node(st, max);
 	if (!node)
 		return false;
-	struct ScrollerStackNode *head = node;
-	while (head->prev_in_stack)
-		head = head->prev_in_stack;
-	for (struct ScrollerStackNode *n = head; n; n = n->next_in_stack)
-		if (n->client->scene)
-			wlr_scene_node_set_enabled(&n->client->scene->node, n->client == max);
+
+	/* Disable ALL other columns (not just stack siblings) */
+	for (struct ScrollerStackNode *n = st->all_first; n; n = n->all_next) {
+		if (n->client->scene && n->client != max) {
+			wlr_scene_node_set_enabled(&n->client->scene->node, false);
+		}
+	}
+
 	struct wlr_box box = {
 		.x = m->w.x + (server.enable_gaps ? m->gappoh : 0),
 		.y = m->w.y + (server.enable_gaps ? m->gappov : 0),
@@ -328,6 +343,13 @@ static bool arrange_bounded_maximized(Monitor *m,
 void scroller(Monitor *m) {
 	uint32_t tag = get_mon_curtag(m);
 	struct TagScrollerState *st = ensure_scroller_state(m, tag);
+
+	/* Bounded-Niri: re-enable all columns at start. This handles:
+	 * 1. Transitioning from bounded maximize (SUPER+a) back to normal
+	 * 2. Transitioning from native maximize/fullscreen back to normal
+	 * It's safe to call this always - already-enabled nodes stay enabled. */
+	scroller_reenable_all_columns(st);
+
 	if (st->maximized_tile && arrange_bounded_maximized(m, st, false))
 		return;
 	Client *c = NULL;
@@ -394,10 +416,8 @@ void scroller(Monitor *m) {
 	 * width while the stored proportion remains at its default (0.5) so that
 	 * a second client arriving immediately snaps back to the 1,1 split. */
 	if (n_heads == 1 && !heads[0]->full_width &&
-		!scroller_ignore_proportion_single &&
-		!heads[0]->client->isfullscreen &&
-		!heads[0]->client->ismaximizescreen &&
-		!config.scroller_niri_view) {
+		!scroller_ignore_proportion_single && !heads[0]->client->isfullscreen &&
+		!heads[0]->client->ismaximizescreen && !config.scroller_niri_view) {
 		struct ScrollerStackNode *head = heads[0];
 		float single_proportion = head->scroller_proportion_single > 0.0f
 									  ? head->scroller_proportion_single
@@ -511,11 +531,25 @@ void scroller(Monitor *m) {
 		horizontal_check_scroller_root_inside_mon(heads[focus_index]->client,
 												  &target_geom);
 		arrange_stack_node(heads[focus_index], target_geom, cur_gappiv);
+		/* Bounded-Niri: when fullscreen, disable all other columns */
+		for (int i = 0; i < n_heads; i++) {
+			if (i != focus_index && heads[i]->client->scene) {
+				wlr_scene_node_set_enabled(&heads[i]->client->scene->node,
+										   false);
+			}
+		}
 	} else if (heads[focus_index]->client->ismaximizescreen) {
 		target_geom.x = m->w.x + cur_gappoh;
 		horizontal_check_scroller_root_inside_mon(heads[focus_index]->client,
 												  &target_geom);
 		arrange_stack_node(heads[focus_index], target_geom, cur_gappiv);
+		/* Bounded-Niri: when natively maximized, disable all other columns */
+		for (int i = 0; i < n_heads; i++) {
+			if (i != focus_index && heads[i]->client->scene) {
+				wlr_scene_node_set_enabled(&heads[i]->client->scene->node,
+										   false);
+			}
+		}
 	} else if (need_scroller) {
 		if (need_apply_center) {
 			target_geom.x = m->w.x + (m->w.width - target_geom.width) / 2;
@@ -580,6 +614,13 @@ void vertical_scroller(Monitor *m) {
 	uint32_t tag = get_mon_curtag(m);
 	int32_t bar_height = 0;
 	struct TagScrollerState *st = ensure_scroller_state(m, tag);
+
+	/* Bounded-Niri: re-enable all columns at start. This handles:
+	 * 1. Transitioning from bounded maximize (SUPER+a) back to normal
+	 * 2. Transitioning from native maximize/fullscreen back to normal
+	 * It's safe to call this always - already-enabled nodes stay enabled. */
+	scroller_reenable_all_columns(st);
+
 	if (st->maximized_tile && st->maximized_tile->mon != m)
 		st->maximized_tile = NULL;
 	if (st->maximized_tile && arrange_bounded_maximized(m, st, true))
@@ -640,10 +681,8 @@ void vertical_scroller(Monitor *m) {
 		m->w.height - 2 * config.scroller_structs - cur_gappiv;
 
 	if (n_heads == 1 && !heads[0]->full_width &&
-		!scroller_ignore_proportion_single &&
-		!heads[0]->client->isfullscreen &&
-		!heads[0]->client->ismaximizescreen &&
-		!config.scroller_niri_view) {
+		!scroller_ignore_proportion_single && !heads[0]->client->isfullscreen &&
+		!heads[0]->client->ismaximizescreen && !config.scroller_niri_view) {
 		struct ScrollerStackNode *head = heads[0];
 		float single_proportion = head->scroller_proportion_single > 0.0f
 									  ? head->scroller_proportion_single
@@ -756,12 +795,26 @@ void vertical_scroller(Monitor *m) {
 												&target_geom);
 		arrange_stack_vertical_node(heads[focus_index], target_geom,
 									cur_gappih);
+		/* Bounded-Niri: when fullscreen, disable all other columns */
+		for (int i = 0; i < n_heads; i++) {
+			if (i != focus_index && heads[i]->client->scene) {
+				wlr_scene_node_set_enabled(&heads[i]->client->scene->node,
+										   false);
+			}
+		}
 	} else if (heads[focus_index]->client->ismaximizescreen) {
 		target_geom.y = m->w.y + cur_gappov;
 		vertical_check_scroller_root_inside_mon(heads[focus_index]->client,
 												&target_geom);
 		arrange_stack_vertical_node(heads[focus_index], target_geom,
 									cur_gappih);
+		/* Bounded-Niri: when natively maximized, disable all other columns */
+		for (int i = 0; i < n_heads; i++) {
+			if (i != focus_index && heads[i]->client->scene) {
+				wlr_scene_node_set_enabled(&heads[i]->client->scene->node,
+										   false);
+			}
+		}
 	} else if (need_scroller) {
 		if (need_apply_center) {
 			target_geom.y = m->w.y + (m->w.height - target_geom.height) / 2;
@@ -837,7 +890,7 @@ void vertical_scroller(Monitor *m) {
 void scroller_remove_client(Client *c) {
 	Monitor *m;
 	wl_list_for_each(m, &server.monitors, link) {
-	for (uint32_t t = 0; t < PERTAG_SLOTS; t++) {
+		for (uint32_t t = 0; t < PERTAG_SLOTS; t++) {
 			struct TagScrollerState *st = m->pertag->scroller_state[t];
 			if (!st)
 				continue;
@@ -1027,12 +1080,8 @@ void scroller_toggle_maximized(Client *c) {
 		return;
 	if (st->maximized_tile == c) {
 		st->maximized_tile = NULL;
-		struct ScrollerStackNode *head = node;
-		while (head->prev_in_stack)
-			head = head->prev_in_stack;
-		for (struct ScrollerStackNode *n = head; n; n = n->next_in_stack)
-			if (n->client->scene)
-				wlr_scene_node_set_enabled(&n->client->scene->node, true);
+		/* Re-enable ALL columns (not just stack siblings) */
+		scroller_reenable_all_columns(st);
 		arrange(m, false, false);
 		return;
 	}
