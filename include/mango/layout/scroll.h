@@ -71,6 +71,11 @@ Client *scroll_get_stack_head_client(Client *c);
 Client *scroll_get_stack_tail_client(Client *c);
 int scroller_stack_size(Client *c);
 void scroller_toggle_maximized(Client *c);
+/* Bounded-Niri: clear any active bounded-maximize state for the tag without
+ * going through toggle_maximize_screen. Used by navigation paths that move
+ * focus off the maximized column so the target column can arrange at its
+ * normal proportion. */
+void scroller_clear_maximize(Monitor *m, uint32_t tag);
 void update_scroller_state(Monitor *m);
 void scroller_swap_nodes_in_same_stack(struct ScrollerStackNode *n1,
 									   struct ScrollerStackNode *n2);

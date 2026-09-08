@@ -2683,7 +2683,15 @@ void scroller_stack(const Arg *arg) {
  * Maps 0/1 to LEFT/RIGHT on a SCROLLER tag and to UP/DOWN on a
  * VERTICAL_SCROLLER tag, then re-uses the same find_client_by_direction +
  * scroller_apply_stack path that scroller_stack uses. Pinned Niri commit:
- * dd75865f547f0eac0e9b6c4d86d2cd00c0744252 (GPL-3.0-or-later). */
+ * dd75865f547f0eac0e9b6c4d86d2cd00c0744252 (GPL-3.0-or-later).
+ *
+ * Bounded-Niri: when the focused column is currently in bounded maximize
+ * state and the resolved target is a different column, clear the
+ * maximize first so the next arrange() shows the target column at its
+ * normal proportion. Niri explicitly allows navigation while maximized;
+ * Mango's arrange path renders only the maximized client otherwise,
+ * so we have to drop the maximize state for the new focus to be
+ * displayed (requirement (3) in the bounded-niri maximize contract). */
 void scroller_axis_navigate(const Arg *arg) {
 	if (!server.selected_monitor)
 		return;
@@ -2712,6 +2720,18 @@ void scroller_axis_navigate(const Arg *arg) {
 	resolved.i = direction;
 
 	Client *target_client = find_client_by_direction(c, &resolved, false);
+	/* Drop bounded maximize if the focus is moving off the maximized
+	 * column. Niri allows navigation while maximized, but Mango's
+	 * arrange path renders only the maximized client otherwise. Clearing
+	 * here keeps siblings enabled (req. 2) and shows the target (req. 3).
+	 * If no target was found we leave maximize alone — the navigation is
+	 * a no-op in that case. */
+	struct TagScrollerState *st = ensure_scroller_state(c->mon, tag);
+	if (st->maximized_tile && target_client &&
+		scroll_get_stack_head_client(st->maximized_tile) !=
+			scroll_get_stack_head_client(target_client)) {
+		scroller_clear_maximize(c->mon, tag);
+	}
 	scroller_apply_stack(c, target_client, direction);
 }
 

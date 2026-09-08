@@ -300,14 +300,15 @@ static void scroller_reenable_all_columns(struct TagScrollerState *st) {
 	}
 }
 
-/* Bounded-Niri: reversible maximize. The clipped siblings stay in the
- * stack (only their scene nodes are disabled) so un-toggle restores the
- * prior column without re-mapping. Algorithm ported from Niri's column
- * maximize path at pinned commit dd75865f547f0eac0e9b6c4d86d2cd00c0744252.
- * License: GPL-3.0-or-later, compatible with Mango's terms.
- *
- * When maximized, disables ALL other columns (not just stack siblings) so they
- * don't appear "under" the maximized window. Matches Niri's behavior. */
+/* Bounded-Niri: reversible maximize. The maximized client fills the work
+ * area in both axes while sibling columns REMAIN ENABLED so existing
+ * scroller focus/scroll navigation (SUPER+[/], SUPER+arrow, etc.) can
+ * reach them. Siblings keep their previously computed geometry; the
+ * maximized column's stored proportion (saved on toggle-on) is set to 1.0
+ * so the next main arrange pass pushes them past the work area edge.
+ * Algorithm ported from Niri's column maximize path at pinned commit
+ * dd75865f547f0eac0e9b6c4d86d2cd00c0744252.
+ * License: GPL-3.0-or-later, compatible with Mango's terms. */
 static bool arrange_bounded_maximized(Monitor *m, struct TagScrollerState *st,
 									  bool vertical) {
 	Client *max = st->maximized_tile;
@@ -319,13 +320,12 @@ static bool arrange_bounded_maximized(Monitor *m, struct TagScrollerState *st,
 	if (!node)
 		return false;
 
-	/* Disable ALL other columns (not just stack siblings) */
-	for (struct ScrollerStackNode *n = st->all_first; n; n = n->all_next) {
-		if (n->client->scene && n->client != max) {
-			wlr_scene_node_set_enabled(&n->client->scene->node, false);
-		}
-	}
-
+	/* Sibling columns remain ENABLED so SUPER+[/] and other focus
+	 * navigation can still select them. Only the maximized client is
+	 * resized here; siblings keep whatever geometry the previous
+	 * non-maximized arrange left them at, which lands them past the work
+	 * area edge because the maximized column now consumes the full
+	 * primary axis (proportion 1.0). */
 	struct wlr_box box = {
 		.x = m->w.x + (server.enable_gaps ? m->gappoh : 0),
 		.y = m->w.y + (server.enable_gaps ? m->gappov : 0),
@@ -894,8 +894,11 @@ void scroller_remove_client(Client *c) {
 			struct TagScrollerState *st = m->pertag->scroller_state[t];
 			if (!st)
 				continue;
+			/* Clear bounded maximize first so the head's
+			 * saved_scroller_proportion is restored to a sibling
+			 * before the head node itself is removed. */
 			if (st->maximized_tile == c)
-				st->maximized_tile = NULL;
+				scroller_clear_maximize(m, t);
 			struct ScrollerStackNode *node = find_scroller_node(st, c);
 			if (node) {
 				scroller_node_remove(st, node);
@@ -1062,11 +1065,44 @@ int scroller_stack_size(Client *c) {
 	return count;
 }
 
-/* Bounded-Niri: toggle a column head between fullscreen and its prior
- * stack. Pairs with arrange_bounded_maximized above. Mirrors the bounded
- * toggle semantics from Niri at commit dd75865f547f0eac0e9b6c4d86d2cd00c0744252
- * (GPL-3.0-or-later). Gated by scroller_niri_view and
- * scroller_restore_stack_after_maximize. */
+/* Bounded-Niri: clear the bounded-maximize state for a tag, restoring the
+ * saved scroller_proportion on the head node so the column renders at its
+ * prior width on the next arrange. Safe to call when no maximize is
+ * active. Used by focus navigation paths that move off the maximized
+ * column, and by scroller_remove_client when the maximized tile goes
+ * away. Mirrors Niri's row-removal-during-maximize behavior at pinned
+ * commit dd75865f547f0eac0e9b6c4d86d2cd00c0744252 (GPL-3.0-or-later). */
+void scroller_clear_maximize(Monitor *m, uint32_t tag) {
+	if (!m)
+		return;
+	struct TagScrollerState *st = m->pertag->scroller_state[tag];
+	if (!st || !st->maximized_tile)
+		return;
+	Client *max = st->maximized_tile;
+	st->maximized_tile = NULL;
+	struct ScrollerStackNode *node = find_scroller_node(st, max);
+	if (node) {
+		/* Walk to the column head; saved_scroller_proportion is owned
+		 * by the head. */
+		while (node->prev_in_stack)
+			node = node->prev_in_stack;
+		if (node->saved_scroller_proportion > 0.0f) {
+			node->scroller_proportion = node->saved_scroller_proportion;
+			node->saved_scroller_proportion = 0.0f;
+			if (node->client)
+				node->client->scroller_proportion = node->scroller_proportion;
+		}
+	}
+}
+
+/* Bounded-Niri: toggle a column head between bounded maximize and its
+ * prior state. On toggle-on, save the head's scroller_proportion to
+ * saved_scroller_proportion, set it to 1.0 (full primary axis), record
+ * the head client as st->maximized_tile. On toggle-off, restore the
+ * saved proportion and clear maximized_tile. Gated by scroller_niri_view
+ * and scroller_restore_stack_after_maximize. Mirrors the bounded toggle
+ * semantics from Niri at commit
+ * dd75865f547f0eac0e9b6c4d86d2cd00c0744252 (GPL-3.0-or-later). */
 void scroller_toggle_maximized(Client *c) {
 	if (!c || !c->mon || c->isfloating || !config.scroller_niri_view ||
 		!config.scroller_restore_stack_after_maximize ||
@@ -1078,14 +1114,46 @@ void scroller_toggle_maximized(Client *c) {
 	struct ScrollerStackNode *node = find_scroller_node(st, c);
 	if (!node)
 		return;
-	if (st->maximized_tile == c) {
+	/* Always operate on the column head so the saved proportion is
+	 * owned by the head, matching toggle_full_width_column semantics. */
+	while (node->prev_in_stack)
+		node = node->prev_in_stack;
+
+	if (st->maximized_tile == node->client) {
+		/* Toggle off: restore the prior proportion. */
+		if (node->saved_scroller_proportion > 0.0f) {
+			node->scroller_proportion = node->saved_scroller_proportion;
+			node->client->scroller_proportion = node->scroller_proportion;
+			node->saved_scroller_proportion = 0.0f;
+		}
 		st->maximized_tile = NULL;
-		/* Re-enable ALL columns (not just stack siblings) */
 		scroller_reenable_all_columns(st);
 		arrange(m, false, false);
 		return;
 	}
-	st->maximized_tile = c;
+
+	/* Toggling on (or switching maximized column): if a different
+	 * column is already maximized, clear it first so we restore its
+	 * saved proportion before saving ours. */
+	if (st->maximized_tile) {
+		scroller_clear_maximize(m, tag);
+		/* After clear, st->maximized_tile is NULL. Re-fetch the
+		 * head node pointer since scroller_clear_maximize walks
+		 * internally. */
+		node = find_scroller_node(m->pertag->scroller_state[tag], c);
+		if (!node)
+			return;
+		while (node->prev_in_stack)
+			node = node->prev_in_stack;
+	}
+
+	/* Save current proportion (only first time we maximize this head)
+	 * and adopt 1.0 effective width for this arrange. */
+	if (node->saved_scroller_proportion <= 0.0f)
+		node->saved_scroller_proportion = node->scroller_proportion;
+	node->scroller_proportion = 1.0f;
+	node->client->scroller_proportion = node->scroller_proportion;
+	st->maximized_tile = node->client;
 	arrange(m, false, false);
 }
 
