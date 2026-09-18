@@ -2533,6 +2533,32 @@ void handle_client_set_title(struct wl_listener *listener, void *data) {
 
 	const char *title;
 	title = client_get_title(c);
+	/* Some Wayland clients (notably browser extension prompts) map before
+	 * publishing their final title. Re-check title-matched floating rules here
+	 * so those transient windows do not briefly become normal tiled columns. */
+	if (title && !c->isfloating && c->mon) {
+		const char *appid = client_get_appid(c);
+		for (uint32_t i = 0; i < config.window_rules_count; i++) {
+			const ConfigWinRule *r = &config.window_rules[i];
+			if (r->isfloating != 1 ||
+				!is_window_rule_matches(r, appid ? appid : broken, title))
+				continue;
+
+			if (r->width > 1)
+				c->float_geom.width = r->width;
+			else if (r->width > 0)
+				c->float_geom.width = round(c->mon->m.width * r->width);
+			if (r->height > 1)
+				c->float_geom.height = r->height;
+			else if (r->height > 0)
+				c->float_geom.height = round(c->mon->m.height * r->height);
+			if (r->width > 0 || r->height > 0)
+				c->iscustomsize = 1;
+
+			client_set_floating(c, 1);
+			break;
+		}
+	}
 	mango_group_bar_update(c->group_bar, title,
 						   c->mon ? c->mon->wlr_output->scale : 1.0f);
 	if (title && c->foreign_toplevel)
@@ -2656,7 +2682,8 @@ void client_focus_with_origin(Client *c, int32_t lift,
 	}
 
 	if (c && client_surface(c) == old_keyboard_focus_surface &&
-		server.selected_monitor && server.selected_monitor->sel) {
+		server.selected_monitor && server.selected_monitor->sel &&
+		(origin != FOCUS_POINTER_CLICK)) {
 		client_ensure_constraint(c);
 		return;
 	}
@@ -2688,6 +2715,28 @@ void client_focus_with_origin(Client *c, int32_t lift,
 
 		client_set_focused_opacity_animation(c);
 
+		/* A floating window can be left partly outside the usable area after a
+		 * monitor change or manual move. Reveal it on an explicit click, while
+		 * keeping hover focus side-effect free. */
+		if (origin == FOCUS_POINTER_CLICK && c->isfloating &&
+			!c->isfullscreen && !c->ismaximizescreen) {
+			struct wlr_box box = c->geom;
+			int32_t min_x = c->mon->w.x;
+			int32_t min_y = c->mon->w.y;
+			int32_t max_x = c->mon->w.x + c->mon->w.width - box.width;
+			int32_t max_y = c->mon->w.y + c->mon->w.height - box.height;
+			if (max_x < min_x)
+				max_x = min_x;
+			if (max_y < min_y)
+				max_y = min_y;
+			box.x = CLAMP_INT(box.x, min_x, max_x);
+			box.y = CLAMP_INT(box.y, min_y, max_y);
+			if (box.x != c->geom.x || box.y != c->geom.y) {
+				c->float_geom = box;
+				resize(c, box, 0);
+			}
+		}
+
 		// decide whether need to re-arrange
 
 		// change focus link position
@@ -2695,8 +2744,8 @@ void client_focus_with_origin(Client *c, int32_t lift,
 		wl_list_insert(&server.focus_stack, &c->flink);
 
 		if ((!config.scroller_niri_view ||
-			 strcmp(config.scroller_pointer_focus_mode, "keep-view") != 0 ||
-			 (origin != FOCUS_POINTER && origin != FOCUS_TABLET)) &&
+				 strcmp(config.scroller_pointer_focus_mode, "keep-view") != 0 ||
+				 (origin != FOCUS_POINTER && origin != FOCUS_TABLET)) &&
 			c && server.selected_monitor->prevsel &&
 			TAGMATCH(server.selected_monitor->prevsel,
 					 server.selected_monitor) &&
@@ -3153,6 +3202,7 @@ void client_apply_fullscreen(
 		return;
 
 	c->isfullscreen = fullscreen;
+	update_dms_bar_fullscreen_visibility(c->mon);
 
 	client_set_fullscreen(c, fullscreen);
 	client_pending_fullscreen_state(c, fullscreen);

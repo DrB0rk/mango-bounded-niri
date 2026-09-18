@@ -54,6 +54,7 @@ void arrange_layer(Monitor *m, struct wl_list *list,
 void layer_focus(LayerSurface *l);
 void reset_exclusive_layers_focus(Monitor *m);
 void arrange_layers(Monitor *m);
+void update_dms_bar_fullscreen_visibility(Monitor *m);
 void iter_layer_scene_buffers(struct wlr_scene_buffer *buffer, int32_t sx,
 							  int32_t sy, void *user_data);
 void layer_flush_blur_background(LayerSurface *l);

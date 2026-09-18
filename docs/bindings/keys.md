@@ -198,6 +198,7 @@ It is formed by tag numbers `1`–`9`, optionally combined with `|`.
 | `toggleoverview` | `[1]` | Toggle overview mode. Passing `1` only shows the current tagset's windows in the overview instead of all tags. |
 | `enteroverview` | - | Enter overview mode. |
 | `leaveoverview` | - | Leave overview mode. |
+| `toggle_layout_panel` | - | Open the small live layout, gap, and floating-snap panel. |
 | `togglejump` | - | Toggle overview with jump mode. |
 | `create_virtual_output` | - | Create a headless monitor (for VNC/Sunshine). |
 | `destroy_all_virtual_output` | - | Destroy all virtual monitors. |

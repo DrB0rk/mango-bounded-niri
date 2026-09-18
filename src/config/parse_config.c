@@ -19,6 +19,7 @@
 #include "mango/ipc/ipc.h"
 #include "mango/layout/arrange.h"
 #include "mango/layout/layout.h"
+#include "mango/layout/panel.h"
 #include "mango/manage/client.h"
 #include "mango/manage/layer.h"
 #include "mango/manage/monitor.h"
@@ -4784,6 +4785,8 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		func = enter_overview;
 	} else if (strcmp(func_name, "leaveoverview") == 0) {
 		func = leave_overview;
+	} else if (strcmp(func_name, "toggle_layout_panel") == 0) {
+		func = toggle_layout_panel;
 	} else if (strcmp(func_name, "togglejump") == 0) {
 		func = toggle_jump;
 	} else if (strcmp(func_name, "set_proportion") == 0) {

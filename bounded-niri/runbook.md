@@ -85,8 +85,12 @@ Transpose the policy, do not create a separate algorithm:
 
 - Keyboard, IPC, activation, and new-window focus activate the destination head and run Niri's fit/center camera policy.
 - Pointer/tablet hover changes keyboard focus and the active tile but must not alter the absolute camera position or any client geometry.
+- Clicking a visible portion of a partially off-screen window is an explicit
+  reveal request and must arrange that window fully inside the usable monitor
+  area.
 - Hover must not raise a floating window unless a separate Mango policy explicitly requests raising.
-- Merely setting `edge_scroller_pointer_focus=0` is wrong: it prevents some focus changes instead of accepting focus without movement.
+- In bounded mode, hover focus does not depend on pointer speed or
+  `edge_scroller_pointer_focus`; those gates are retained only for stock mode.
 - Merely skipping `arrange()` is also incomplete once an explicit camera exists. Call the common activation path with `KEEP_CAMERA`, update active head/tile, and render from the unchanged camera.
 
 ### Maximize contract

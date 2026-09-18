@@ -14,9 +14,35 @@
 #include <wlr/types/wlr_layer_shell_v1.h>
 #include <wlr/types/wlr_output.h>
 #include <wlr/types/wlr_xdg_shell.h>
+#include <string.h>
 
 /* Maps the wlr_layer_shell layer enum to scene layers. */
 static const int32_t layermap[] = {LyrBg, LyrBottom, LyrTop, LyrOverlay};
+
+void update_dms_bar_fullscreen_visibility(Monitor *m) {
+	if (!m)
+		return;
+
+	bool has_fullscreen = false;
+	Client *c = NULL;
+	wl_list_for_each(c, &server.clients, link) {
+		if (c->mon == m && VISIBLEON(c, m) && c->isfullscreen) {
+			has_fullscreen = true;
+			break;
+		}
+	}
+
+	for (int32_t i = 0; i < 4; i++) {
+		LayerSurface *l = NULL;
+		wl_list_for_each(l, &m->layers[i], link) {
+			if (strcmp(l->layer_surface->namespace, "dms:bar") != 0)
+				continue;
+			wlr_scene_node_set_enabled(
+				&l->scene->node,
+				l->mapped && l->layer_surface->surface->buffer && !has_fullscreen);
+		}
+	}
+}
 
 void arrange_layer(Monitor *m, struct wl_list *list,
 				   struct wlr_box *usable_area, int32_t exclusive) {
@@ -242,6 +268,7 @@ void handle_layer_surface_map(struct wl_listener *listener, void *data) {
 	// Refreshes the layout so windows notice exclude_zone changes and sets the
 	// exclusive surface.
 	arrange_layers(l->mon);
+	update_dms_bar_fullscreen_visibility(l->mon);
 	reset_exclusive_layers_focus(l->mon);
 	printstatus(IPC_WATCH_LAST_OPEN_SURFACE);
 }
@@ -340,6 +367,7 @@ void handle_layer_surface_commit(struct wl_listener *listener, void *data) {
 	}
 
 	arrange_layers(l->mon);
+	update_dms_bar_fullscreen_visibility(l->mon);
 
 	if (layer_surface->current.committed &
 		WLR_LAYER_SURFACE_V1_STATE_KEYBOARD_INTERACTIVITY) {

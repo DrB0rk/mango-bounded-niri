@@ -25,17 +25,16 @@ struct ScrollerStackNode {
 	 * edge, so a second toggle restores the original split.
 	 * Pinned Niri commit: dd75865f547f0eac0e9b6c4d86d2cd00c0744252 */
 	float saved_scroller_proportion;
+	/* Bounded-Niri: maximize is independent per column, allowing several
+	 * columns to remain expanded while the viewport moves between them. */
+	float saved_maximized_scroller_proportion;
+	bool maximized;
 };
 
 struct TagScrollerState {
 	struct ScrollerStackNode
 		*all_first; /* Singly linked list head for all nodes. */
 	int count;
-	/* Bounded-Niri: maximized_tile tracks the column head currently shown
-	 * fullscreen via scroller_toggle_maximized, enabling reversible
-	 * maximize that restores the prior stack without re-mapping.
-	 * Pinned Niri commit: dd75865f547f0eac0e9b6c4d86d2cd00c0744252 */
-	Client *maximized_tile;
 };
 
 /* Gets or creates the scroller state for a given tag of the specified monitor.
@@ -71,11 +70,6 @@ Client *scroll_get_stack_head_client(Client *c);
 Client *scroll_get_stack_tail_client(Client *c);
 int scroller_stack_size(Client *c);
 void scroller_toggle_maximized(Client *c);
-/* Bounded-Niri: clear any active bounded-maximize state for the tag without
- * going through toggle_maximize_screen. Used by navigation paths that move
- * focus off the maximized column so the target column can arrange at its
- * normal proportion. */
-void scroller_clear_maximize(Monitor *m, uint32_t tag);
 void update_scroller_state(Monitor *m);
 void scroller_swap_nodes_in_same_stack(struct ScrollerStackNode *n1,
 									   struct ScrollerStackNode *n2);

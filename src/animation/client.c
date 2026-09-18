@@ -442,7 +442,6 @@ void client_draw_groupbar(Client *c, struct ivec2 offsets) {
 	if (bottom_over > 0) {
 		th = th - GEZERO(bottom_over - c->animation.current.height);
 	}
-
 	if (right_over > 0)
 		tw = tw - right_over;
 	if (left_over > 0) {
@@ -922,10 +921,19 @@ void client_set_drop_area(Client *c) {
 				drop_box.width = strip_size;
 				drop_box.height = client_height;
 			} else {
-				drop_box.x = bw;
-				drop_box.y = bw;
-				drop_box.width = client_width / 2;
-				drop_box.height = client_height;
+				if (rel_x > client_width / 3.0 &&
+					rel_x < client_width * 2.0 / 3.0) {
+					drop_direction = UNDIR;
+					drop_box.x = bw + client_width / 3;
+					drop_box.y = bw;
+					drop_box.width = client_width / 3;
+					drop_box.height = client_height;
+				} else {
+					drop_box.x = bw;
+					drop_box.y = bw;
+					drop_box.width = client_width / 2;
+					drop_box.height = client_height;
+				}
 			}
 		} else if (dist_right <= dist_top && dist_right <= dist_bottom) {
 			drop_direction = RIGHT;
@@ -935,18 +943,37 @@ void client_set_drop_area(Client *c) {
 				drop_box.width = strip_size;
 				drop_box.height = client_height;
 			} else {
-				drop_box.x = bw + client_width / 2;
-				drop_box.y = bw;
-				drop_box.width = client_width / 2;
-				drop_box.height = client_height;
+				if (rel_x > client_width / 3.0 &&
+					rel_x < client_width * 2.0 / 3.0) {
+					drop_direction = UNDIR;
+					drop_box.x = bw + client_width / 3;
+					drop_box.y = bw;
+					drop_box.width = client_width / 3;
+					drop_box.height = client_height;
+				} else {
+					drop_box.x = bw + client_width / 2;
+					drop_box.y = bw;
+					drop_box.width = client_width / 2;
+					drop_box.height = client_height;
+				}
 			}
 		} else if (dist_top <= dist_bottom) {
 			drop_direction = UP;
 			if (horizontal) {
-				drop_box.x = bw;
-				drop_box.y = bw;
-				drop_box.width = client_width;
-				drop_box.height = client_height / 2;
+				if (rel_y > client_height / 3.0 &&
+					rel_y < client_height * 2.0 / 3.0) {
+					/* Centre means insert after this exact stack member. */
+					drop_direction = UNDIR;
+					drop_box.x = bw;
+					drop_box.y = bw + client_height / 3;
+					drop_box.width = client_width;
+					drop_box.height = client_height / 3;
+				} else {
+					drop_box.x = bw;
+					drop_box.y = bw;
+					drop_box.width = client_width;
+					drop_box.height = client_height / 2;
+				}
 			} else {
 				drop_box.x = bw;
 				drop_box.y = bw;
@@ -956,10 +983,19 @@ void client_set_drop_area(Client *c) {
 		} else {
 			drop_direction = DOWN;
 			if (horizontal) {
-				drop_box.x = bw;
-				drop_box.y = bw + client_height / 2;
-				drop_box.width = client_width;
-				drop_box.height = client_height / 2;
+				if (rel_y > client_height / 3.0 &&
+					rel_y < client_height * 2.0 / 3.0) {
+					drop_direction = UNDIR;
+					drop_box.x = bw;
+					drop_box.y = bw + client_height / 3;
+					drop_box.width = client_width;
+					drop_box.height = client_height / 3;
+				} else {
+					drop_box.x = bw;
+					drop_box.y = bw + client_height / 2;
+					drop_box.width = client_width;
+					drop_box.height = client_height / 2;
+				}
 			} else {
 				drop_box.x = bw;
 				drop_box.y = bw + client_height - strip_size;

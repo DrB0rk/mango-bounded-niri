@@ -33,6 +33,9 @@ typedef struct MangoGroupBar MangoGroupBar;
 enum FocusOrigin {
 	FOCUS_KEYBOARD,
 	FOCUS_POINTER,
+	/* Pointer focus caused by a button press. Hover focus must not move the
+	 * viewport, while a click is allowed to bring the target fully into view. */
+	FOCUS_POINTER_CLICK,
 	FOCUS_TABLET,
 	FOCUS_IPC,
 	FOCUS_ACTIVATION,

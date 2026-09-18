@@ -17,7 +17,10 @@ overlays the user's bounded policy:
   1,1 split without re-mapping.
 - Two-client limit per column on the auto-stack path (manual joins
   beyond `scroller_stack_max` are **not** yet gated — see Status below).
-- Hover-focus never auto-pans partially off-screen windows.
+- Hover-focus works on partially visible windows without panning; clicking a
+  window brings it fully into the usable monitor area.
+- Super+semicolon opens a small live panel for the active layout, gap size,
+  and floating snap setting.
 - Singleton column fills the full monitor edge.
 - Whole-column maximize is reversible: the prior stack is preserved.
 - `toggle_full_width_column` saves the prior proportion so a second
@@ -35,7 +38,7 @@ Implementation status against the 10-phase plan in `runbook.md`:
 | 4 | Independent camera + viewport gestures | **partial** — state machine wired; touchpad/pointer gestures **deferred** (`scroller_view_gesture_fingers`, `scroller_dnd_edge_scroll` are accepted but unused) |
 | 5 | Exact closest-gap insertion + drag-placement | **deferred** — only the auto-stack path inserts |
 | 6 | Bounded `1,1,2` map policy | **partial** — auto-stack enforced; manual-join cap on `scroller_stack_max` not yet enforced |
-| 7 | Focus origins + hover-without-pan | done — `FocusOrigin` enum, `client_focus_with_origin`, pointer + tablet updated, `scroller_pointer_focus_mode=keep-view` honored |
+| 7 | Focus origins + hover-without-pan | done — hover focuses without moving the viewport, while click focus reveals the target inside the usable monitor area |
 | 8 | Reversible maximize + full-width column | done — `scroller_toggle_maximized` and `toggle_full_width_column` |
 | 9 | Niri size actions + 50 % floor | done — `set_column_size`, `adjust_column_size`, `set_proportion` clamped |
 | 10 | Configuration plumbing | done — 9 new `scroller_*` options in `config.def` and `override_config`; 3 new dispatch names registered |

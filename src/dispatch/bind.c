@@ -2700,7 +2700,7 @@ int32_t scroller_stack(const Arg *arg) {
 	return 0;
 }
 
-/* Bounded-Niri: SUPER+[/] should navigate the primary axis of the focused
+/* Bounded-Niri: resolve an input relative to the primary axis of the focused
  * monitor regardless of whether the active tag uses a horizontal or
  * vertical scroller layout. arg->i is the relative direction:
  *   0 → "backward" along the primary axis
@@ -2752,11 +2752,12 @@ int32_t scroller_axis_navigate(const Arg *arg) {
 	 * If no target was found we leave maximize alone — the navigation is
 	 * a no-op in that case. */
 	struct TagScrollerState *st = ensure_scroller_state(c->mon, tag);
-	if (st->maximized_tile && target_client &&
-		scroll_get_stack_head_client(st->maximized_tile) !=
-			scroll_get_stack_head_client(target_client)) {
-		 scroller_clear_maximize(c->mon, tag);
-	}
+	struct ScrollerStackNode *node = find_scroller_node(st, c);
+	while (node && node->prev_in_stack)
+		node = node->prev_in_stack;
+	if (node && node->maximized && target_client &&
+		node->client != scroll_get_stack_head_client(target_client))
+		scroller_toggle_maximized(c);
 	scroller_apply_stack(c, target_client, direction);
 	return 0;
 }

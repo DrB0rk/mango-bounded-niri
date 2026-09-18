@@ -8,6 +8,7 @@
 #include "mango/input/device.h"
 #include "mango/input/pointer.h"
 #include "mango/ipc/ipc.h"
+#include "mango/layout/panel.h"
 #include "mango/manage/client.h"
 #include "mango/manage/monitor.h"
 #include "mango/switcher/switcher.h"
@@ -714,6 +715,16 @@ void handle_keyboard_key(struct wl_listener *listener, void *data) {
 
 	if (handled)
 		return;
+
+	/* The layout panel is a compositor-owned modal surface. Let configured
+	 * bindings, including its toggle binding, run first; consume everything
+	 * else so keys never leak into the focused client while it is open. */
+	if (layout_panel_is_active()) {
+		for (i = 0; i < nsyms; i++)
+			if (layout_panel_handle_key(syms[i], event->state, mods))
+				return;
+		return;
+	}
 
 	if (server.selected_monitor && server.selected_monitor->is_jump_mode &&
 		event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {

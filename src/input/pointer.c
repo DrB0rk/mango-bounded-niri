@@ -11,6 +11,7 @@
 #include "mango/layout/arrange.h"
 #include "mango/layout/dwindle.h"
 #include "mango/layout/layout.h"
+#include "mango/layout/panel.h"
 #include "mango/layout/scroll.h"
 #include "mango/manage/client.h"
 #include "mango/manage/layer.h"
@@ -18,6 +19,7 @@
 #include "mango/manage/monitor.h"
 #include "mango/switcher/switcher.h"
 #include <linux/input-event-codes.h>
+#include <math.h>
 #include <scenefx/types/wlr_scene.h>
 #include <wlr/backend/libinput.h>
 #include <wlr/types/wlr_cursor.h>
@@ -930,7 +932,6 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 	Client *closet_drop_client = NULL;
 	LayerSurface *l = NULL;
 	struct wlr_surface *surface = NULL;
-	bool should_lock = false;
 
 	/* time is 0 in internal calls meant to restore pointer focus. */
 	if (time) {
@@ -983,13 +984,21 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 		wlr_idle_notifier_v1_notify_activity(server.idle_notifier, server.seat);
 
 		/* Update selected_monitor (even while dragging a window) */
-		if (config.sloppyfocus) {
+		if (config.sloppyfocus && !layout_panel_is_active()) {
 			Monitor *oldmon = server.selected_monitor;
 			set_selected_monitor(
 				monitor_at_point(server.cursor->x, server.cursor->y));
 			if (oldmon != server.selected_monitor)
 				printstatus(IPC_WATCH_MONITOR | IPC_WATCH_ALL_MONITORS);
 		}
+	}
+
+	/* Keep the compositor panel modal while it is open. It has no Wayland
+	 * surface for node_at_point() to find, so without this guard motion could
+	 * continue to focus or drag a client underneath it. */
+	if (layout_panel_is_active()) {
+		wlr_seat_pointer_notify_clear_focus(server.seat);
+		return;
 	}
 
 	/* Find the client under the pointer and send the event along. */
@@ -1038,6 +1047,10 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 				client_set_drop_area(server.drop_client);
 				server.drop_client = NULL;
 			}
+			/* The target can stay the same while the intended drop slot changes.
+			 * Re-evaluate on every pointer motion so the preview follows it. */
+			if (server.drop_client)
+				client_set_drop_area(server.drop_client);
 		}
 		resize(server.grab_client, server.grab_client->float_geom, 1);
 		return;
@@ -1063,33 +1076,36 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 	if (!surface && !server.seat->drag && !server.cursor_hidden)
 		wlr_cursor_set_xcursor(server.cursor, server.cursor_manager, "default");
 
-	if (c && c->mon && !c->animation.running &&
-		(INSIDEMON(c) || !ISSCROLLTILED(c))) {
-		server.scroller_focus_lock = 0;
-	}
+	/* In bounded-Niri mode hover focus is always accepted, including for a
+	 * partially visible column. client_focus_with_origin() keeps that hover
+	 * stationary; only a button press uses FOCUS_POINTER_CLICK and asks the
+	 * layout to reveal the client. Keep the upstream edge gate when the mode is
+	 * disabled. */
+	if (config.scroller_niri_view) {
+		pointer_focus(c, surface, sx, sy, time);
+	} else {
+		bool should_lock = false;
+		double speed = config.edge_scroller_pointer_focus
+						? sqrt(dx * dx + dy * dy)
+						: 0.0;
 
-	should_lock = false;
-	double speed = 0.0f;
+		if (c && c->mon && !c->animation.running &&
+			(INSIDEMON(c) || !ISSCROLLTILED(c)))
+			server.scroller_focus_lock = 0;
 
-	if (config.edge_scroller_pointer_focus) {
-		speed = sqrt(dx * dx + dy * dy);
-	}
+		if (!server.scroller_focus_lock || !(c && c->mon && !INSIDEMON(c))) {
+			if (c && c->mon && ISSCROLLTILED(c) && is_scroller_layout(c->mon) &&
+				!INSIDEMON(c))
+				should_lock = true;
 
-	if (!server.scroller_focus_lock || !(c && c->mon && !INSIDEMON(c))) {
-		if (c && c->mon && ISSCROLLTILED(c) && is_scroller_layout(c->mon) &&
-			!INSIDEMON(c)) {
-			should_lock = true;
-		}
+			if (!((!config.edge_scroller_pointer_focus ||
+				   speed < config.edge_scroller_focus_allow_speed) &&
+				  c && c->mon && ISSCROLLTILED(c) && is_scroller_layout(c->mon) &&
+				  !INSIDEMON(c)))
+				pointer_focus(c, surface, sx, sy, time);
 
-		if (!((!config.edge_scroller_pointer_focus ||
-			   speed < config.edge_scroller_focus_allow_speed) &&
-			  c && c->mon && ISSCROLLTILED(c) && is_scroller_layout(c->mon) &&
-			  !INSIDEMON(c))) {
-			pointer_focus(c, surface, sx, sy, time);
-		}
-
-		if (should_lock && c && c->mon && ISTILED(c) && c == c->mon->sel) {
-			server.scroller_focus_lock = 1;
+			if (should_lock && c && c->mon && ISTILED(c) && c == c->mon->sel)
+				server.scroller_focus_lock = 1;
 		}
 	}
 }
@@ -1330,19 +1346,19 @@ void pointer_place_drag_tile(Client *c) {
 		const Layout *layout =
 			closest->mon->pertag->ltidxs[get_client_tag_idx(closest)];
 
-		if (closest->drop_direction == UNDIR) {
-			client_set_floating(c, 0);
-			wl_list_safe_reinsert_prev(&closest->link, &c->link);
-			arrange(closest->mon, false, false);
-			return;
-		}
-
 		if (layout->id == SCROLLER) {
 			scroller_drop_tile(c, closest, 0);
 			return;
 		}
 		if (layout->id == VERTICAL_SCROLLER) {
 			scroller_drop_tile(c, closest, 1);
+			return;
+		}
+
+		if (closest->drop_direction == UNDIR) {
+			client_set_floating(c, 0);
+			wl_list_safe_reinsert_prev(&closest->link, &c->link);
+			arrange(closest->mon, false, false);
 			return;
 		}
 		if (layout->id == DWINDLE) {
@@ -1395,6 +1411,9 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 
 	pointer_cursor_activity();
 	wlr_idle_notifier_v1_notify_activity(server.idle_notifier, server.seat);
+	if (layout_panel_is_active())
+		return layout_panel_handle_button(server.cursor->x, server.cursor->y,
+									 event->button, event->state);
 
 	if (event->pointer && check_trackpad_disabled(event->pointer)) {
 		return true;
@@ -1434,7 +1453,7 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 			if (c && c->scene && c->scene->node.enabled &&
 				VISIBLEON(c, c->mon) &&
 				(!client_is_unmanaged(c) || client_wants_focus(c)))
-				client_focus_with_origin(c, 1, FOCUS_POINTER);
+				client_focus_with_origin(c, 1, FOCUS_POINTER_CLICK);
 
 			if (surface != old_pointer_focus_surface) {
 				wlr_seat_pointer_notify_clear_focus(server.seat);
