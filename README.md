@@ -1,7 +1,7 @@
 <div align="center">
   <img src="https://github.com/mangowm/mango/blob/main/assets/mango-transparency-256.png" alt="Mango Logo" width="120"/>
 
-  <h1>Mango Wayland Compositor</h1>
+  <h1>Mango Wayland Compositor, bounded-Niri fork</h1>
 
   <p>A fast, feature-rich Wayland compositor built on <a href="https://codeberg.org/dwl/dwl">dwl</a></p>
 
@@ -19,6 +19,47 @@ https://github.com/user-attachments/assets/bb83004a-0563-4b48-ad89-6461a9b78b1f
 https://github.com/user-attachments/assets/be85e13f-7798-456d-957e-f8931687392e
 
 
+
+## What this fork adds
+
+This fork carries the local bounded-Niri work on top of Mango 0.17.2. It keeps Mango's layouts and protocols while adding a predictable scrolling workflow for windows that should stay usable at a readable size.
+
+- **Bounded scroller columns**: Niri-style scrolling with a configurable minimum column proportion, stack limits, automatic stacking, and horizontal or vertical scroller layouts.
+- **Hover focus without viewport movement**: moving the pointer focuses a window so scroll and typing go to it. The viewport only reveals a partially visible window after an explicit click.
+- **Safe click reveal**: clicking a floating window that extends beyond the usable monitor area clamps it fully into view.
+- **Primary-axis navigation**: one binding works across horizontal and vertical scrollers. The direction is resolved from the active layout.
+- **Reversible column maximize**: maximize a scroller column, navigate away, and restore its previous proportion later.
+- **Compositor-native layout panel**: press `Super+;` to switch between Tile, Scroller, and Vertical layouts, adjust spacing, and toggle floating snapping without leaving the compositor.
+- **Persistent panel settings**: panel layout, gaps, and floating snap are saved atomically under `$XDG_STATE_HOME/mango/layout-panel.conf`, or `$HOME/.local/state/mango/layout-panel.conf`.
+- **Stability hardening**: monitor teardown closes the panel safely, capped stack drops roll back cleanly, compositor-owned allocations fail closed, and config parsing runs as a Meson test.
+
+The fork is intentionally small. The changes live in the Mango source tree and the `bounded-niri/` configuration bundle, so the custom behavior can be reviewed or removed without replacing Mango's core architecture.
+
+## Quick start with the bundled configuration
+
+Build and validate the fork:
+
+```bash
+git clone https://github.com/DrB0rk/mango-bounded-niri.git
+cd mango-bounded-niri
+meson setup build --buildtype=debugoptimized
+meson compile -C build
+build/mango -c bounded-niri/config-bounded-niri.conf -p
+```
+
+Run Mango with the bounded-Niri configuration from a session launcher or a nested Wayland session:
+
+```bash
+build/mango -c bounded-niri/config-bounded-niri.conf
+```
+
+The bundled bindings include `Super+[` and `Super+]` for primary-axis navigation, `Super+Shift+F` for column maximize, and `Super+;` for the layout panel. The full binding and configuration notes are in [`bounded-niri/README.md`](bounded-niri/README.md) and [`bounded-niri/runbook.md`](bounded-niri/runbook.md).
+
+Panel settings are runtime preferences, not edits to the checked-in config file. To reset them, remove the state file and restart Mango:
+
+```bash
+rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/mango/layout-panel.conf"
+```
 
 > See all layouts in action at [mangowm.github.io](https://mangowm.github.io/)
 

@@ -9,6 +9,8 @@
 bool layout_panel_is_active(void);
 int32_t toggle_layout_panel(const Arg *arg);
 void layout_panel_close(void);
+void layout_panel_monitor_destroyed(Monitor *mon);
+void layout_panel_load_persisted_config(void);
 bool layout_panel_handle_button(double lx, double ly, uint32_t button,
 								uint32_t state);
 bool layout_panel_handle_key(xkb_keysym_t sym, uint32_t state, uint32_t mods);

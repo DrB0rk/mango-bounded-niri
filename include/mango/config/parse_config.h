@@ -324,6 +324,8 @@ typedef struct {
 	double animation_curve_opafadeout[4];
 
 	int32_t scroller_structs;
+	char layout_panel_default[32];
+	int32_t layout_panel_override;
 	float scroller_default_proportion;
 	float scroller_default_proportion_single;
 	int32_t scroller_ignore_proportion_single;

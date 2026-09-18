@@ -8,8 +8,14 @@
 #include "mango/manage/monitor.h"
 #include <linux/input-event-codes.h>
 #include <scenefx/types/wlr_scene.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <sys/stat.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #define PANEL_WIDTH 450
 #define PANEL_HEIGHT 274
@@ -54,6 +60,165 @@ static const char *const panel_layout_names[] = {"tile", "scroller",
 static const char *const panel_layout_labels[] = {"Tiled", "Scroller",
 												  "Vertical"};
 static const float panel_text[4] = {0.92f, 0.90f, 0.86f, 1.0f};
+
+static bool panel_layout_name_allowed(const char *name) {
+	for (size_t i = 0; i < sizeof(panel_layout_names) /
+												  sizeof(panel_layout_names[0]);
+		 i++) {
+		if (strcmp(name, panel_layout_names[i]) == 0)
+			return true;
+	}
+	return false;
+}
+
+static bool panel_state_paths(char *state_dir, size_t state_dir_size,
+							  char *state_path, size_t state_path_size) {
+	const char *state_home = getenv("XDG_STATE_HOME");
+	const char *home = getenv("HOME");
+	char parent[PATH_MAX];
+
+	if (state_home && *state_home) {
+		if (snprintf(state_dir, state_dir_size, "%s/mango", state_home) >=
+			(int)state_dir_size)
+			return false;
+		if (snprintf(state_path, state_path_size, "%s/layout-panel.conf",
+					 state_dir) >= (int)state_path_size)
+			return false;
+		return true;
+	}
+
+	if (!home || !*home ||
+		snprintf(parent, sizeof(parent), "%s/.local/state", home) >=
+			(int)sizeof(parent) ||
+		snprintf(state_dir, state_dir_size, "%s/mango", parent) >=
+			(int)state_dir_size ||
+		snprintf(state_path, state_path_size, "%s/layout-panel.conf",
+				 state_dir) >= (int)state_path_size)
+		return false;
+	return true;
+}
+
+static bool panel_ensure_state_dir(void) {
+	char state_dir[PATH_MAX], state_path[PATH_MAX];
+	const char *state_home = getenv("XDG_STATE_HOME");
+	const char *home = getenv("HOME");
+	char parent[PATH_MAX];
+
+	if (!panel_state_paths(state_dir, sizeof(state_dir), state_path,
+						   sizeof(state_path)))
+		return false;
+
+	if (state_home && *state_home) {
+		if (mkdir(state_home, 0700) < 0 && errno != EEXIST)
+			return false;
+	} else {
+		if (!home || !*home ||
+			snprintf(parent, sizeof(parent), "%s/.local", home) >=
+				(int)sizeof(parent) ||
+			(mkdir(parent, 0700) < 0 && errno != EEXIST))
+			return false;
+		if (snprintf(parent, sizeof(parent), "%s/.local/state", home) >=
+			(int)sizeof(parent) ||
+			(mkdir(parent, 0700) < 0 && errno != EEXIST))
+			return false;
+	}
+
+	if (mkdir(state_dir, 0700) < 0 && errno != EEXIST)
+		return false;
+	return true;
+}
+
+static bool panel_parse_int(const char *value, int32_t *result) {
+	char *end = NULL;
+	long parsed;
+
+	errno = 0;
+	parsed = strtol(value, &end, 10);
+	if (errno == ERANGE || end == value || *end != '\0' ||
+		parsed < INT32_MIN || parsed > INT32_MAX)
+		return false;
+	*result = (int32_t)parsed;
+	return true;
+}
+
+static void panel_persist_state(void) {
+	char state_dir[PATH_MAX], state_path[PATH_MAX], temp_path[PATH_MAX];
+	if (!panel_ensure_state_dir() ||
+		!panel_state_paths(state_dir, sizeof(state_dir), state_path,
+						   sizeof(state_path)) ||
+		snprintf(temp_path, sizeof(temp_path), "%s/.layout-panel.XXXXXX",
+				  state_dir) >= (int)sizeof(temp_path))
+		return;
+
+	int fd = mkstemp(temp_path);
+	if (fd < 0)
+		return;
+	FILE *file = fdopen(fd, "w");
+	if (!file) {
+		close(fd);
+		unlink(temp_path);
+		return;
+	}
+
+	bool ok = fprintf(file,
+				  "# Mango layout panel state\n"
+				  "layout=%s\n"
+				  "gappoh=%u\n"
+				  "gappov=%u\n"
+				  "gappih=%u\n"
+				  "gappiv=%u\n"
+				  "floating_snap=%d\n",
+				  config.layout_panel_default, config.gappoh, config.gappov,
+				  config.gappih, config.gappiv,
+				  config.enable_floating_snap) >= 0;
+	if (ok)
+		ok = fflush(file) == 0 && fsync(fd) == 0;
+	if (fclose(file) != 0)
+		ok = false;
+	if (ok && rename(temp_path, state_path) == 0)
+		return;
+	unlink(temp_path);
+}
+
+void layout_panel_load_persisted_config(void) {
+	char state_dir[PATH_MAX], state_path[PATH_MAX];
+	char line[128], key[32], value[80];
+	FILE *file;
+
+	if (!panel_state_paths(state_dir, sizeof(state_dir), state_path,
+						   sizeof(state_path)))
+		return;
+	file = fopen(state_path, "r");
+	if (!file)
+		return;
+
+	while (fgets(line, sizeof(line), file)) {
+		int32_t parsed;
+		if (sscanf(line, "%31[^=]=%79[^\n]", key, value) != 2)
+			continue;
+		if (strcmp(key, "layout") == 0 && panel_layout_name_allowed(value)) {
+			snprintf(config.layout_panel_default,
+					 sizeof(config.layout_panel_default), "%.31s", value);
+			config.layout_panel_override = 1;
+		} else if (strcmp(key, "gappoh") == 0 &&
+				   panel_parse_int(value, &parsed)) {
+			config.gappoh = CLAMP_INT(parsed, 0, 1000);
+		} else if (strcmp(key, "gappov") == 0 &&
+				   panel_parse_int(value, &parsed)) {
+			config.gappov = CLAMP_INT(parsed, 0, 1000);
+		} else if (strcmp(key, "gappih") == 0 &&
+				   panel_parse_int(value, &parsed)) {
+			config.gappih = CLAMP_INT(parsed, 0, 1000);
+		} else if (strcmp(key, "gappiv") == 0 &&
+				   panel_parse_int(value, &parsed)) {
+			config.gappiv = CLAMP_INT(parsed, 0, 1000);
+		} else if (strcmp(key, "floating_snap") == 0 &&
+				   panel_parse_int(value, &parsed)) {
+			config.enable_floating_snap = CLAMP_INT(parsed, 0, 1);
+		}
+	}
+	fclose(file);
+}
 
 static DecorateDrawData panel_text_data(bool button) {
 	DecorateDrawData data = {0};
@@ -133,6 +298,9 @@ static void panel_activate(int control) {
 	case PANEL_LAYOUT_SCROLLER:
 	case PANEL_LAYOUT_VERTICAL:
 		arg.v = (char *)panel_layout_names[control];
+		snprintf(config.layout_panel_default,
+				 sizeof(config.layout_panel_default), "%s", arg.v);
+		config.layout_panel_override = 1;
 		set_layout(&arg);
 		break;
 	case PANEL_GAP_DOWN:
@@ -152,6 +320,14 @@ static void panel_activate(int control) {
 	default:
 		return;
 	}
+	if (server.selected_monitor && control >= PANEL_GAP_DOWN &&
+		control <= PANEL_GAP_UP) {
+		config.gappoh = server.selected_monitor->gappoh;
+		config.gappov = server.selected_monitor->gappov;
+		config.gappih = server.selected_monitor->gappih;
+		config.gappiv = server.selected_monitor->gappiv;
+	}
+	panel_persist_state();
 	panel_refresh();
 }
 
@@ -177,6 +353,11 @@ void layout_panel_close(void) {
 		mango_jump_label_node_destroy(labels[i]);
 	wlr_scene_node_destroy(&panel.tree->node);
 	memset(&panel, 0, sizeof(panel));
+}
+
+void layout_panel_monitor_destroyed(Monitor *mon) {
+	if (panel.mon == mon)
+		layout_panel_close();
 }
 
 int32_t toggle_layout_panel(const Arg *arg) {
@@ -205,7 +386,11 @@ int32_t toggle_layout_panel(const Arg *arg) {
 	panel.border = wlr_scene_rect_create(panel.tree, PANEL_WIDTH, PANEL_HEIGHT,
 										 config.focuscolor);
 	panel.background = wlr_scene_rect_create(panel.tree, PANEL_WIDTH - 4,
-											 PANEL_HEIGHT - 4, panel_color);
+													 PANEL_HEIGHT - 4, panel_color);
+	if (!panel.border || !panel.background) {
+		layout_panel_close();
+		return 0;
+	}
 	wlr_scene_node_set_position(&panel.background->node, 2, 2);
 
 	panel.title = panel_make_label("Layout controls", false, PANEL_MARGIN, 18);

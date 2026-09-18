@@ -16,6 +16,7 @@
 #include "mango/layout/arrange.h"
 #include "mango/layout/dwindle.h"
 #include "mango/layout/layout.h"
+#include "mango/layout/panel.h"
 #include "mango/layout/scroll.h"
 #include "mango/manage/client.h"
 #include "mango/manage/layer.h"
@@ -898,6 +899,7 @@ void monitor_close(Monitor *m) {
 	 * move closed monitor's clients to the focused one */
 	Client *c = NULL;
 	int32_t i = 0, nmons = wl_list_length(&server.monitors);
+	layout_panel_monitor_destroyed(m);
 
 	if (server.gesture_drive_mon == m) {
 		server.gesture_drive_active = false;

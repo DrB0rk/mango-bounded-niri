@@ -63,9 +63,9 @@ void arrange_stack_vertical_node(struct ScrollerStackNode *head,
 void scroller(Monitor *m);
 void vertical_scroller(Monitor *m);
 void scroller_remove_client(Client *c);
-void scroller_insert_stack(Client *c, Client *target_client,
+bool scroller_insert_stack(Client *c, Client *target_client,
 						   bool insert_before);
-void scroller_drop_tile(Client *c, Client *closest, int vertical);
+bool scroller_drop_tile(Client *c, Client *closest, int vertical);
 Client *scroll_get_stack_head_client(Client *c);
 Client *scroll_get_stack_tail_client(Client *c);
 int scroller_stack_size(Client *c);

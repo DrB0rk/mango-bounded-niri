@@ -539,6 +539,9 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->scroller_prefer_center = atoi(value);
 	} else if (strcmp(key, "scroller_prefer_overspread") == 0) {
 		config->scroller_prefer_overspread = atoi(value);
+	} else if (strcmp(key, "default_layout") == 0) {
+		snprintf(config->layout_panel_default,
+				 sizeof(config->layout_panel_default), "%.31s", value);
 	} else if (strcmp(key, "scroller_niri_view") == 0) {
 		config->scroller_niri_view = atoi(value);
 	} else if (strcmp(key, "scroller_stack_max") == 0) {
@@ -3694,6 +3697,18 @@ void override_config(void) {
 		CLAMP_INT(config.scroller_prefer_center, 0, 1);
 	config.scroller_prefer_overspread =
 		CLAMP_INT(config.scroller_prefer_overspread, 0, 1);
+	bool layout_valid = false;
+	for (int32_t i = 0; i < LENGTH(layouts); i++) {
+		if (strcmp(config.layout_panel_default, layouts[i].name) == 0) {
+			layout_valid = true;
+			break;
+		}
+	}
+	if (!layout_valid) {
+		snprintf(config.layout_panel_default,
+				 sizeof(config.layout_panel_default), "tile");
+		config.layout_panel_override = 0;
+	}
 	config.scroller_niri_view = CLAMP_INT(config.scroller_niri_view, 0, 1);
 	config.scroller_stack_max = CLAMP_INT(config.scroller_stack_max, 0, 1000);
 	config.scroller_auto_stack_every =
@@ -3983,6 +3998,9 @@ void set_value_default() {
 	config.special_gappov = 20;
 
 	config.scroller_structs = 20;
+	snprintf(config.layout_panel_default,
+			 sizeof(config.layout_panel_default), "tile");
+	config.layout_panel_override = 0;
 	config.scroller_default_proportion = 0.9f;
 	config.scroller_default_proportion_single = 1.0f;
 	config.scroller_ignore_proportion_single = 1;
@@ -4353,6 +4371,7 @@ bool parse_config(void) {
 	bool keybindings_conflict = false;
 	set_value_default();
 	parse_correct = parse_config_file(&config, filename, true);
+	layout_panel_load_persisted_config();
 	set_default_key_bindings(&config);
 	override_config();
 
@@ -4577,9 +4596,16 @@ void reapply_master(void) {
 
 // Reset a pertag slot to defaults.
 void tag_slot_set_defaults(Monitor *m, uint32_t tag) {
+	int32_t layout_index = 0;
+	for (int32_t i = 0; i < LENGTH(layouts); i++) {
+		if (strcmp(config.layout_panel_default, layouts[i].name) == 0) {
+			layout_index = i;
+			break;
+		}
+	}
 	m->pertag->nmasters[tag] = config.default_nmaster;
 	m->pertag->mfacts[tag] = config.default_mfact;
-	m->pertag->ltidxs[tag] = &layouts[0];
+	m->pertag->ltidxs[tag] = &layouts[layout_index];
 	m->pertag->scroller_default_proportion[tag] =
 		config.scroller_default_proportion;
 	m->pertag->scroller_default_proportion_single[tag] =
@@ -4657,6 +4683,19 @@ void parse_tagrule(Monitor *m) {
 
 			for (ti = tag_id_start; ti <= tag_id_end; ti++)
 				tag_rule_apply_to_slot(m, tr, ti);
+		}
+	}
+
+	/* A layout selected in the native panel is an explicit user override of
+	 * the configured tag rules and is restored on startup/reload. */
+	if (config.layout_panel_override) {
+		for (i = 0; i <= config.tag_num; i++) {
+			for (int32_t jk = 0; jk < LENGTH(layouts); jk++) {
+				if (strcmp(config.layout_panel_default, layouts[jk].name) == 0) {
+					m->pertag->ltidxs[i] = &layouts[jk];
+					break;
+				}
+			}
 		}
 	}
 

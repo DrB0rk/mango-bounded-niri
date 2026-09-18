@@ -10,7 +10,7 @@
 struct TagScrollerState *ensure_scroller_state(Monitor *m, uint32_t tag) {
 	if (!m->pertag->scroller_state[tag]) {
 		struct TagScrollerState *st =
-			calloc(1, sizeof(struct TagScrollerState));
+			ecalloc(1, sizeof(struct TagScrollerState));
 		m->pertag->scroller_state[tag] = st;
 	}
 	return m->pertag->scroller_state[tag];
@@ -29,8 +29,10 @@ struct ScrollerStackNode *find_scroller_node(struct TagScrollerState *st,
 
 /* Creates a new node and inserts it into the tag state all list. */
 struct ScrollerStackNode *scroller_node_create(struct TagScrollerState *st,
-											   Client *c) {
-	struct ScrollerStackNode *n = calloc(1, sizeof(*n));
+												   Client *c) {
+	if (!st || !c)
+		return NULL;
+	struct ScrollerStackNode *n = ecalloc(1, sizeof(*n));
 	n->client = c;
 	n->scroller_proportion = c->scroller_proportion;
 	n->stack_proportion = c->stack_proportion;
@@ -866,14 +868,15 @@ void scroller_remove_client(Client *c) {
 	}
 }
 
-void scroller_insert_stack(Client *c, Client *target_client,
-						   bool insert_before) {
-	if (!target_client || target_client->mon != c->mon)
-		return;
+bool scroller_insert_stack(Client *c, Client *target_client,
+							   bool insert_before) {
+	if (!c || !c->mon || !target_client || target_client->mon != c->mon)
+		return false;
+	if (c == target_client)
+		return false;
 	if (config.scroller_niri_view && config.scroller_stack_max > 0 &&
-		c != target_client &&
 		scroller_stack_size(target_client) >= config.scroller_stack_max)
-		return;
+		return false;
 
 	if (c->isfullscreen)
 		client_apply_fullscreen(c, 0, true);
@@ -883,16 +886,27 @@ void scroller_insert_stack(Client *c, Client *target_client,
 	Monitor *m = c->mon;
 	uint32_t tag = get_mon_curtag(m);
 	struct TagScrollerState *st = ensure_scroller_state(m, tag);
+	if (!st)
+		return false;
 
 	struct ScrollerStackNode *cnode = find_scroller_node(st, c);
-	if (cnode)
-		scroller_node_remove(st, cnode);
-
 	struct ScrollerStackNode *tnode = find_scroller_node(st, target_client);
-	if (!tnode)
+	bool created_target = false;
+	if (!tnode) {
 		tnode = scroller_node_create(st, target_client);
+		created_target = true;
+	}
+	if (!tnode)
+		return false;
 
 	struct ScrollerStackNode *newnode = scroller_node_create(st, c);
+	if (!newnode) {
+		if (created_target)
+			scroller_node_remove(st, tnode);
+		return false;
+	}
+	if (cnode)
+		scroller_node_remove(st, cnode);
 	/* Inserts the new node before or after tnode. */
 	if (insert_before) {
 		newnode->next_in_stack = tnode;
@@ -924,9 +938,13 @@ void scroller_insert_stack(Client *c, Client *target_client,
 	sync_scroller_state_to_clients(m, tag);
 
 	arrange(m, false, false);
+	return true;
 }
 
-void scroller_drop_tile(Client *c, Client *closest, int vertical) {
+bool scroller_drop_tile(Client *c, Client *closest, int vertical) {
+	if (!c || !c->mon || !closest || closest->mon != c->mon)
+		return false;
+	bool was_floating = c->isfloating;
 
 	// Must update first; otherwise nodes inside still hold cnode info and
 	// stack_head/stack_tail would point at the wrong clients.
@@ -939,19 +957,28 @@ void scroller_drop_tile(Client *c, Client *closest, int vertical) {
 		/* The centre preview denotes the insertion point immediately after
 		 * the stack member beneath the pointer. */
 		client_set_floating(c, 0);
-		scroller_insert_stack(c, closest, false);
-		return;
+		if (!scroller_insert_stack(c, closest, false)) {
+			client_set_floating(c, was_floating);
+			return false;
+		}
+		return true;
 	}
 
 	if (vertical) {
 		if (closest->drop_direction == LEFT) {
 			client_set_floating(c, 0);
-			scroller_insert_stack(c, closest, true);
-			return;
+			if (!scroller_insert_stack(c, closest, true)) {
+				client_set_floating(c, was_floating);
+				return false;
+			}
+			return true;
 		} else if (closest->drop_direction == RIGHT) {
 			client_set_floating(c, 0);
-			scroller_insert_stack(c, closest, false);
-			return;
+			if (!scroller_insert_stack(c, closest, false)) {
+				client_set_floating(c, was_floating);
+				return false;
+			}
+			return true;
 		} else if (closest->drop_direction == UP) {
 			if (c != stack_head) {
 				wl_list_safe_reinsert_prev(&stack_head->link, &c->link);
@@ -964,12 +991,18 @@ void scroller_drop_tile(Client *c, Client *closest, int vertical) {
 	} else {
 		if (closest->drop_direction == UP) {
 			client_set_floating(c, 0);
-			scroller_insert_stack(c, closest, true);
-			return;
+			if (!scroller_insert_stack(c, closest, true)) {
+				client_set_floating(c, was_floating);
+				return false;
+			}
+			return true;
 		} else if (closest->drop_direction == DOWN) {
 			client_set_floating(c, 0);
-			scroller_insert_stack(c, closest, false);
-			return;
+			if (!scroller_insert_stack(c, closest, false)) {
+				client_set_floating(c, was_floating);
+				return false;
+			}
+			return true;
 		} else if (closest->drop_direction == LEFT) {
 			if (c != stack_head) {
 				wl_list_safe_reinsert_prev(&stack_head->link, &c->link);
@@ -982,6 +1015,7 @@ void scroller_drop_tile(Client *c, Client *closest, int vertical) {
 	}
 
 	client_set_floating(c, 0);
+	return true;
 }
 
 Client *scroll_get_stack_head_client(Client *c) {

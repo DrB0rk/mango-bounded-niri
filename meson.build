@@ -1,5 +1,6 @@
 project('mango', ['c'],
   version : '0.17.2',
+  default_options : ['warning_level=1', 'werror=true'],
 )
 
 subdir('protocols')
@@ -105,7 +106,7 @@ mango_sources = files(run_command(find, 'src', '-name', '*.c', check: true).stdo
 
 mango_inc = include_directories('.', 'include')
 
-executable('mango',
+mango_exe = executable('mango',
   mango_sources,
 
   wayland_sources,
@@ -131,6 +132,13 @@ executable('mango',
   c_args : c_args,
   link_args : link_args,
 )
+
+test('parse-bounded-niri-config', mango_exe,
+  args : ['-c', join_paths(meson.project_source_root(),
+                           'bounded-niri/config-bounded-niri.conf'), '-p'])
+test('parse-stock-config', mango_exe,
+  args : ['-c', join_paths(meson.project_source_root(),
+                           'assets/config.conf'), '-p'])
 
 # build mmsg
 
