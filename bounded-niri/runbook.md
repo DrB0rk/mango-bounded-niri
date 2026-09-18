@@ -6,7 +6,12 @@
 
 **Pinned Niri source:** `dd75865f547f0eac0e9b6c4d86d2cd00c0744252`
 
-**Pinned Mango source:** `efb5ed9bce19e0ae260ca34b35cfcdc9d4d8b2fc`
+**Current Mango source:** `766da93fa6fa816140d2c22c9f8c3a644f3e666e` (0.17.2)
+**Bounded-Niri integration:** `963bcd49`
+
+The historical design references below were written against the original
+0.16.3-derived base. The current implementation has been ported to the
+0.17.2 source layout and API.
 
 **Deliverable:** implement, configure, test, and troubleshoot Niri's scrolling mechanics inside Mango while retaining the user's explicit bounded placement policy.
 

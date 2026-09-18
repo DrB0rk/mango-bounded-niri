@@ -1,10 +1,11 @@
 # Mango — bounded Niri mode
 
-A patched Mango 0.16.3 source tree that implements Niri's scrolling
+A patched Mango 0.17.2 source tree that implements Niri's scrolling
 mechanics with an explicit **bounded placement policy** on top.
 
-| Pinned Mango | `efb5ed9bce19e0ae260ca34b35cfcdc9d4d8b2fc` |
+| Pinned Mango | `766da93fa6fa816140d2c22c9f8c3a644f3e666e` (upstream 0.17.2) |
 | --- | --- |
+| Fork integration | `963bcd49` |
 | Pinned Niri  | `dd75865f547f0eac0e9b6c4d86d2cd00c0744252` |
 | Mode flag    | `scroller_niri_view` (off by default; Mango behaves stock when off) |
 
@@ -34,7 +35,7 @@ Implementation status against the 10-phase plan in `runbook.md`:
 | --- | --- | --- |
 | 1 | Preflight + backups | done |
 | 2 | Pin Mango, branch repo | done (fork at `DrB0rk/mango-bounded-niri`) |
-| 3 | Replace scroller state without changing defaults | done — `full_width`, `saved_scroller_proportion`, `maximized_tile` |
+| 3 | Replace scroller state without changing defaults | done — `full_width`, `saved_scroller_proportion`, per-column `maximized` |
 | 4 | Independent camera + viewport gestures | **partial** — state machine wired; touchpad/pointer gestures **deferred** (`scroller_view_gesture_fingers`, `scroller_dnd_edge_scroll` are accepted but unused) |
 | 5 | Exact closest-gap insertion + drag-placement | **deferred** — only the auto-stack path inserts |
 | 6 | Bounded `1,1,2` map policy | **partial** — auto-stack enforced; manual-join cap on `scroller_stack_max` not yet enforced |

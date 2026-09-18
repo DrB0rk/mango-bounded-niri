@@ -1,8 +1,20 @@
-# VALIDATION.md — evidence captured 2026-09-07
+# VALIDATION.md — evidence captured 2026-09-18
 
 This file records the validation evidence for the bounded-Niri patches
-shipped in this fork of Mango 0.16.3. It is the receipt for the
+shipped in this fork of Mango 0.17.2. It is the receipt for the
 "fully finish and validate but don't switch yet" run.
+
+The detailed live-session notes below are historical evidence from the
+pre-0.17.2 migration. The current source-level receipt is:
+
+```text
+upstream base: 766da93fa6fa816140d2c22c9f8c3a644f3e666e (Mango 0.17.2)
+fork integration: 963bcd49
+build: meson compile -C build (pass)
+configs: bounded-niri/config-bounded-niri.conf and assets/config.conf (pass)
+tests: no tests defined by Meson
+diff check: git diff --check (pass)
+```
 
 ## 1. Build
 
